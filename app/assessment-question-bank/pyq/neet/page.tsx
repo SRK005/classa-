@@ -5,11 +5,7 @@ import { db } from '../../../../lib/firebaseClient';
 import { collection, query, where, getDocs } from "firebase/firestore";
 import 'katex/dist/katex.min.css';
 import { BlockMath, InlineMath } from 'react-katex';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
-import { PDFDownloadLink } from '@react-pdf/renderer';
-import QuestionPaperPDF from './QuestionPaperPDF';
-import latexToDataUrl from './latexToDataUrl';
+import html2pdf from 'html2pdf.js';
 
 const years = Array.from({ length: 2025 - 2014 + 1 }, (_, i) => 2014 + i);
 
@@ -60,6 +56,10 @@ if (typeof window !== 'undefined') {
         color: #00000011;
       }
     }
+    .page-break {
+      page-break-after: always;
+      break-after: page;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -69,16 +69,8 @@ function isLatex(str: string | undefined): boolean {
   return /\$.*\$|\\\w+/.test(str);
 }
 
-function preprocessQuestions(questions: any[]) {
-  return questions.map(q => ({
-    ...q,
-    questionLatexImg: isLatex(q.question) ? latexToDataUrl(q.question) : null,
-    optionALatexImg: isLatex(q.optionA) ? latexToDataUrl(q.optionA) : null,
-    optionBLatexImg: isLatex(q.optionB) ? latexToDataUrl(q.optionB) : null,
-    optionCLatexImg: isLatex(q.optionC) ? latexToDataUrl(q.optionC) : null,
-    optionDLatexImg: isLatex(q.optionD) ? latexToDataUrl(q.optionD) : null,
-  }));
-}
+// TypeScript: declare module for html2pdf.js if needed
+// declare module 'html2pdf.js';
 
 export default function NeetPYQPage() {
   const [practiceYear, setPracticeYear] = useState<number | null>(null);
@@ -94,7 +86,7 @@ export default function NeetPYQPage() {
   const [optionAnim, setOptionAnim] = useState<{[key:string]:string}>({});
   const [pdfLoading, setPdfLoading] = useState(false);
   const [forceSingleCol, setForceSingleCol] = useState(false);
-  const [processedQuestions, setProcessedQuestions] = useState<any[] | null>(null);
+  const [pdfExporting, setPdfExporting] = useState(false);
 
   // Fetch questions when dialog opens
   useEffect(() => {
@@ -137,12 +129,6 @@ export default function NeetPYQPage() {
     if (practiceYear) fetchQuestions(practiceYear);
     if (viewYear) fetchQuestions(viewYear);
   }, [practiceYear, viewYear]);
-
-  useEffect(() => {
-    if (questions && questions.length > 0) {
-      setProcessedQuestions(preprocessQuestions(questions));
-    }
-  }, [questions]);
 
   // Practice logic
   function handleSelectOption(opt: string) {
@@ -194,6 +180,23 @@ export default function NeetPYQPage() {
         : <span key={i}>{part}</span>
     );
   }
+
+  const handleDownloadPDF = async () => {
+    setPdfExporting(true);
+    const element = document.getElementById('question-paper-view');
+    if (element) {
+      const opt = {
+        margin:       [0.5, 0.5, 0.5, 0.5], // top, left, bottom, right in inches
+        filename:     `NEET_PYQ_${viewYear}_Question_Paper.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true },
+        jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' },
+        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+      };
+      await html2pdf().set(opt).from(element).save();
+    }
+    setPdfExporting(false);
+  };
 
   return (
     <div className="min-h-screen flex font-sans bg-[#F8F9FB]">
@@ -400,15 +403,21 @@ export default function NeetPYQPage() {
               </button>
               <div className="flex flex-col items-center border-b border-gray-200 p-6">
                 <div className="text-base text-gray-700 font-serif mb-2">NEET PYQ {viewYear} - Question Paper</div>
-                {processedQuestions && (
-                  <PDFDownloadLink
-                    document={<QuestionPaperPDF questions={processedQuestions} viewYear={viewYear} />}
-                    fileName={`NEET_PYQ_${viewYear}_Question_Paper.pdf`}
-                    className="mt-2 px-6 py-2 rounded bg-black text-white font-bold shadow hover:bg-gray-800 transition"
-                  >
-                    {({ loading }) => loading ? 'Preparing PDF...' : 'Download as PDF'}
-                  </PDFDownloadLink>
-                )}
+                <button
+                  onClick={handleDownloadPDF}
+                  className="mt-2 px-6 py-2 rounded bg-black text-white font-bold shadow hover:bg-gray-800 transition disabled:opacity-60"
+                  disabled={pdfExporting}
+                >
+                  {pdfExporting ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                      </svg>
+                      Preparing PDF...
+                    </span>
+                  ) : 'Download as PDF'}
+                </button>
               </div>
               <div className="p-2 sm:p-8 overflow-y-auto max-h-[70vh] bg-white relative" id="question-paper-view" style={{ fontFamily: 'Times New Roman, Times, serif', color: '#222' }}>
                 <div className="question-watermark">CLASSA</div>

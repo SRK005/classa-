@@ -4,6 +4,7 @@ import { db } from '../../../../lib/firebaseClient';
 import { collection, query, where, getDocs, Query, doc, DocumentReference } from 'firebase/firestore';
 import { BlockMath, InlineMath } from 'react-katex';
 import 'katex/dist/katex.min.css';
+import { set as idbSet, get as idbGet } from 'idb-keyval';
 
 interface Question {
   id: string;
@@ -23,6 +24,26 @@ interface Question {
 interface FilterEntity {
   id: string;
   name: string;
+}
+
+const CACHE_TTL = 31 * 24 * 60 * 60 * 1000; // 31 days
+
+function getCached<T>(key: string, ttl: number): T | null {
+  if (typeof window === 'undefined') return null;
+  const item = localStorage.getItem(key);
+  if (!item) return null;
+  try {
+    const { value, timestamp } = JSON.parse(item);
+    if (Date.now() - timestamp < ttl) {
+      return value as T;
+    }
+  } catch {}
+  return null;
+}
+
+function setCached<T>(key: string, value: T): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(key, JSON.stringify({ value, timestamp: Date.now() }));
 }
 
 function renderWithLatex(text: string) {
@@ -79,11 +100,23 @@ export default function ViewEdueronQuestions() {
   // Fetch classes with sp: true and store Class 11/12 IDs
   useEffect(() => {
     async function fetchClasses() {
+      const cacheKey = 'edueron_classes';
+      const cached = getCached<FilterEntity[]>(cacheKey, CACHE_TTL);
+      if (cached) {
+        setClasses(cached);
+        // Also set class11Id/class12Id if needed
+        const class11 = cached.find(c => c.name?.toString().includes('11'));
+        const class12 = cached.find(c => c.name?.toString().includes('12'));
+        setClass11Id(class11?.id || '');
+        setClass12Id(class12?.id || '');
+        return;
+      }
       const q = query(collection(db, 'classes'), where('sp', '==', true));
       const snap = await getDocs(q);
       const classList = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name || '' }));
       setClasses(classList);
-      // Find Class 11 and 12 IDs
+      setCached(cacheKey, classList);
+      // Set class11Id/class12Id
       const class11 = classList.find(c => c.name?.toString().includes('11'));
       const class12 = classList.find(c => c.name?.toString().includes('12'));
       setClass11Id(class11?.id || '');
@@ -96,11 +129,12 @@ export default function ViewEdueronQuestions() {
   useEffect(() => {
     if (!selectedClass) { setSubjects([]); setSelectedSubject(''); return; }
     async function fetchSubjects() {
-      // Use Firestore document references for classID
+      const cacheKey = `edueron_subjects_class_${selectedClass}`;
+      const cached = getCached<FilterEntity[]>(cacheKey, CACHE_TTL);
+      if (cached) { setSubjects(cached); return; }
       const classRef = doc(db, 'classes', selectedClass);
       let q;
       if (selectedClass === class11Id && class12Id) {
-        // For Class 11, show subjects for both Class 11 and 12
         const class11Ref = doc(db, 'classes', class11Id);
         const class12Ref = doc(db, 'classes', class12Id);
         q = query(collection(db, 'subjects'), where('sp', '==', true), where('classID', 'in', [class11Ref, class12Ref]));
@@ -108,7 +142,9 @@ export default function ViewEdueronQuestions() {
         q = query(collection(db, 'subjects'), where('sp', '==', true), where('classID', '==', classRef));
       }
       const snap = await getDocs(q);
-      setSubjects(snap.docs.map(doc => ({ id: doc.id, name: doc.data().name || '' })));
+      const subjectList = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name || '' }));
+      setSubjects(subjectList);
+      setCached(cacheKey, subjectList);
     }
     fetchSubjects();
   }, [selectedClass, class11Id, class12Id]);
@@ -117,9 +153,14 @@ export default function ViewEdueronQuestions() {
   useEffect(() => {
     if (!selectedSubject) { setChapters([]); setSelectedChapter(''); return; }
     async function fetchChapters() {
+      const cacheKey = `edueron_chapters_subject_${selectedSubject}`;
+      const cached = getCached<FilterEntity[]>(cacheKey, CACHE_TTL);
+      if (cached) { setChapters(cached); return; }
       const q = query(collection(db, 'chapters'), where('sp', '==', true), where('subjectID', '==', doc(db, 'subjects', selectedSubject)));
       const snap = await getDocs(q);
-      setChapters(snap.docs.map(doc => ({ id: doc.id, name: doc.data().name || '' })));
+      const chapterList = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name || '' }));
+      setChapters(chapterList);
+      setCached(cacheKey, chapterList);
     }
     fetchChapters();
   }, [selectedSubject]);
@@ -128,9 +169,14 @@ export default function ViewEdueronQuestions() {
   useEffect(() => {
     if (!selectedChapter) { setLessons([]); setSelectedLesson(''); return; }
     async function fetchLessons() {
+      const cacheKey = `edueron_lessons_chapter_${selectedChapter}`;
+      const cached = getCached<FilterEntity[]>(cacheKey, CACHE_TTL);
+      if (cached) { setLessons(cached); return; }
       const q = query(collection(db, 'lessons'), where('sp', '==', true), where('chapterID', '==', doc(db, 'chapters', selectedChapter)));
       const snap = await getDocs(q);
-      setLessons(snap.docs.map(doc => ({ id: doc.id, name: doc.data().title || doc.data().name || '' })));
+      const lessonList = snap.docs.map(doc => ({ id: doc.id, name: doc.data().title || doc.data().name || '' }));
+      setLessons(lessonList);
+      setCached(cacheKey, lessonList);
     }
     fetchLessons();
   }, [selectedChapter]);
@@ -139,45 +185,48 @@ export default function ViewEdueronQuestions() {
   useEffect(() => {
     async function fetchQuestions() {
       setLoading(true);
-      try {
-        let q: Query = query(collection(db, 'questionCollection'), where('sp', '==', true));
-        if (selectedLesson) q = query(q, where('lessonID', '==', doc(db, 'lessons', selectedLesson)));
-        else if (selectedChapter) q = query(q, where('chapterID', '==', doc(db, 'chapters', selectedChapter)));
-        else if (selectedSubject) q = query(q, where('subjectID', '==', doc(db, 'subjects', selectedSubject)));
-        else if (selectedClass) {
-          // Use Firestore document references for classID
-          const classRef = doc(db, 'classes', selectedClass);
-          if (selectedClass === class11Id && class12Id) {
-            const class11Ref = doc(db, 'classes', class11Id);
-            const class12Ref = doc(db, 'classes', class12Id);
-            q = query(q, where('classID', 'in', [class11Ref, class12Ref]));
-          } else {
-            q = query(q, where('classID', '==', classRef));
-          }
-        }
-        const snap = await getDocs(q);
-        const data = snap.docs.map(docSnap => {
-          const d = docSnap.data();
-          return {
-            id: docSnap.id,
-            question: d.questionText || d.question || '',
-            optionA: d.optionA || '',
-            optionB: d.optionB || '',
-            optionC: d.optionC || '',
-            optionD: d.optionD || '',
-            correct: d.correct || '',
-            explanation: d.explanation || '',
-            solution: d.solution || '',
-            difficulty: d.difficulty || '',
-            bloom: d.bloom || '',
-          };
-        });
-        setQuestions(data);
-      } catch {
-        setQuestions([]);
-      } finally {
+      const cacheKey = `edueron_questions_filters_${selectedClass}_${selectedSubject}_${selectedChapter}_${selectedLesson}`;
+      // IndexedDB: store { value, timestamp }
+      const cached: { value: Question[]; timestamp: number } | undefined = await idbGet(cacheKey);
+      if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        setQuestions(cached.value);
         setLoading(false);
+        return;
       }
+      let q: Query = query(collection(db, 'questionCollection'), where('sp', '==', true));
+      if (selectedLesson) q = query(q, where('lessonID', '==', doc(db, 'lessons', selectedLesson)));
+      else if (selectedChapter) q = query(q, where('chapterID', '==', doc(db, 'chapters', selectedChapter)));
+      else if (selectedSubject) q = query(q, where('subjectID', '==', doc(db, 'subjects', selectedSubject)));
+      else if (selectedClass) {
+        const classRef = doc(db, 'classes', selectedClass);
+        if (selectedClass === class11Id && class12Id) {
+          const class11Ref = doc(db, 'classes', class11Id);
+          const class12Ref = doc(db, 'classes', class12Id);
+          q = query(q, where('classID', 'in', [class11Ref, class12Ref]));
+        } else {
+          q = query(q, where('classID', '==', classRef));
+        }
+      }
+      const snap = await getDocs(q);
+      const data = snap.docs.map(docSnap => {
+        const d = docSnap.data();
+        return {
+          id: docSnap.id,
+          question: d.questionText || d.question || '',
+          optionA: d.optionA || '',
+          optionB: d.optionB || '',
+          optionC: d.optionC || '',
+          optionD: d.optionD || '',
+          correct: d.correct || '',
+          explanation: d.explanation || '',
+          solution: d.solution || '',
+          difficulty: d.difficulty || '',
+          bloom: d.bloom || '',
+        };
+      });
+      setQuestions(data);
+      await idbSet(cacheKey, { value: data, timestamp: Date.now() });
+      setLoading(false);
     }
     fetchQuestions();
   }, [selectedClass, selectedSubject, selectedChapter, selectedLesson, class11Id, class12Id]);

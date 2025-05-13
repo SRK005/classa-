@@ -7,26 +7,95 @@ import { faPlus, faList, faUpload, faBook, faLayerGroup } from "@fortawesome/fre
 import { useEffect, useState } from "react";
 import { db } from '../../../lib/firebaseClient';
 import { collection, query, where, getCountFromServer } from "firebase/firestore";
+import { auth } from "../../../components/firebase";
+import { doc, getDoc } from "firebase/firestore";
+
+const SCHOOL_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+const EDUERON_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+const PYQ_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+function getCachedCount(key: string, ttl: number): number | null {
+  if (typeof window === 'undefined') return null;
+  const item = localStorage.getItem(key);
+  if (!item) return null;
+  try {
+    const { value, timestamp } = JSON.parse(item);
+    if (Date.now() - timestamp < ttl) {
+      return value;
+    }
+  } catch {}
+  return null;
+}
+
+function setCachedCount(key: string, value: number): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(key, JSON.stringify({ value, timestamp: Date.now() }));
+}
 
 export default function QuestionBankDashboard() {
   const router = useRouter();
+  const [schoolCount, setSchoolCount] = useState<number | null>(null);
   const [edueronCount, setEdueronCount] = useState<number | null>(null);
   const [pyqCount, setPyqCount] = useState<number | null>(null);
 
   useEffect(() => {
-    async function fetchCounts() {
+    async function fetchSchoolCount() {
+      const cacheKey = "schoolCount";
+      const cached = getCachedCount(cacheKey, SCHOOL_CACHE_TTL);
+      if (cached !== null) {
+        setSchoolCount(cached);
+        return;
+      }
       try {
-        const edueronQ = query(collection(db, "questionCollection"), where("sp", "==", true));
-        const pyqQ = query(collection(db, "questionCollection"), where("previous", "==", true));
-        const [edueronSnap, pyqSnap] = await Promise.all([
-          getCountFromServer(edueronQ),
-          getCountFromServer(pyqQ),
-        ]);
-        setEdueronCount(edueronSnap.data().count);
-        setPyqCount(pyqSnap.data().count);
+        const user = auth.currentUser;
+        if (!user) return setSchoolCount(null);
+        // Fetch user doc to get schoolId (as a DocumentReference)
+        const userSnap = await getDoc(doc(db, "users", user.uid));
+        const schoolRef = userSnap.exists() ? userSnap.data().schoolId : null;
+        if (!schoolRef) return setSchoolCount(null);
+        // Query questionCollection for this school
+        const q = query(collection(db, "questionCollection"), where("schoolID", "==", schoolRef));
+        const snap = await getCountFromServer(q);
+        setSchoolCount(snap.data().count);
+        setCachedCount(cacheKey, snap.data().count);
       } catch {
-        setEdueronCount(null);
-        setPyqCount(null);
+        setSchoolCount(null);
+      }
+    }
+    fetchSchoolCount();
+  }, []);
+
+  useEffect(() => {
+    async function fetchCounts() {
+      // Edueron
+      const edueronCacheKey = "edueronCount";
+      const edueronCached = getCachedCount(edueronCacheKey, EDUERON_CACHE_TTL);
+      if (edueronCached !== null) {
+        setEdueronCount(edueronCached);
+      } else {
+        try {
+          const edueronQ = query(collection(db, "questionCollection"), where("sp", "==", true));
+          const edueronSnap = await getCountFromServer(edueronQ);
+          setEdueronCount(edueronSnap.data().count);
+          setCachedCount(edueronCacheKey, edueronSnap.data().count);
+        } catch {
+          setEdueronCount(null);
+        }
+      }
+      // PYQ
+      const pyqCacheKey = "pyqCount";
+      const pyqCached = getCachedCount(pyqCacheKey, PYQ_CACHE_TTL);
+      if (pyqCached !== null) {
+        setPyqCount(pyqCached);
+      } else {
+        try {
+          const pyqQ = query(collection(db, "questionCollection"), where("previous", "==", true));
+          const pyqSnap = await getCountFromServer(pyqQ);
+          setPyqCount(pyqSnap.data().count);
+          setCachedCount(pyqCacheKey, pyqSnap.data().count);
+        } catch {
+          setPyqCount(null);
+        }
       }
     }
     fetchCounts();
@@ -45,7 +114,11 @@ export default function QuestionBankDashboard() {
             <div className="bg-[#C4B5FD] p-3 rounded-full mb-4">
               <FontAwesomeIcon icon={faBook} className="text-xl text-white" />
             </div>
-            <div className="text-2xl font-bold text-gray-800 mb-1">1,234</div>
+            <div className="text-2xl font-bold text-gray-800 mb-1">
+              {schoolCount === null
+                ? <span className="flex items-center justify-center"><svg className="animate-spin h-6 w-6 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg></span>
+                : schoolCount.toLocaleString()}
+            </div>
             <div className="text-gray-500">Questions in School</div>
           </div>
           {/* Questions in Edueron */}
@@ -53,7 +126,11 @@ export default function QuestionBankDashboard() {
             <div className="bg-[#6EE7B7] p-3 rounded-full mb-4">
               <FontAwesomeIcon icon={faLayerGroup} className="text-xl text-white" />
             </div>
-            <div className="text-2xl font-bold text-gray-800 mb-1">{edueronCount === null ? "-" : edueronCount.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-gray-800 mb-1">
+              {edueronCount === null
+                ? <span className="flex items-center justify-center"><svg className="animate-spin h-6 w-6 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg></span>
+                : edueronCount.toLocaleString()}
+            </div>
             <div className="text-gray-500">Questions in Edueron</div>
           </div>
           {/* Questions in PYQ */}
@@ -61,7 +138,11 @@ export default function QuestionBankDashboard() {
             <div className="bg-[#FBCFE8] p-3 rounded-full mb-4">
               <FontAwesomeIcon icon={faList} className="text-xl text-white" />
             </div>
-            <div className="text-2xl font-bold text-gray-800 mb-1">{pyqCount === null ? "-" : pyqCount.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-gray-800 mb-1">
+              {pyqCount === null
+                ? <span className="flex items-center justify-center"><svg className="animate-spin h-6 w-6 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg></span>
+                : pyqCount.toLocaleString()}
+            </div>
             <div className="text-gray-500">Questions in PYQ</div>
           </div>
           {/* Add Question */}
