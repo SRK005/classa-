@@ -30,25 +30,19 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f6f8fc]">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#fdf6f0] to-[#f7e7ee]">
       <div className="flex w-full max-w-4xl min-h-[600px] rounded-3xl shadow-2xl overflow-hidden bg-white">
         {/* Left: Info Panel */}
-        <div className="hidden md:flex flex-col justify-center items-start w-1/2 bg-gradient-to-br from-[#fdf6f0] via-[#f7e9e3] to-[#ffe0f7] px-12">
-          <div className="mb-2 text-base text-black font-normal">For everyone.</div>
-          <div className="relative">
-            <h1 className="text-4xl md:text-5xl font-extrabold text-black leading-tight mb-2">
-              Manage <span className="relative inline-block">
-                <span className="relative z-10">classes</span>
-                {/* SVG oval highlight */}
-                <svg
-                  className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-full pointer-events-none"
-                  width="100%" height="1.2em" viewBox="0 0 120 40"
-                >
-                  <ellipse cx="60" cy="20" rx="55" ry="16" fill="none" stroke="#a78bfa" strokeWidth="3" />
-                </svg>
-              </span> as easily<br />
-              as sending a message.
-            </h1>
+        <div className="hidden md:flex flex-col justify-center items-center w-1/2 bg-transparent relative">
+          <div className="absolute inset-0 bg-transparent" />
+          <div className="relative z-10 p-12">
+            <div className="text-base font-medium text-gray-700 mb-2">For everyone.</div>
+            <div className="text-4xl md:text-5xl font-extrabold text-black leading-tight mb-4">
+              Send <span className="relative inline-block">money{/*
+                <span className="absolute left-0 right-0 bottom-0 h-2 bg-purple-200 rounded-full opacity-60" style={{ zIndex: -1 }} />
+              */}</span> as easily<br />as sending a message.
+            </div>
+            <div className="text-gray-700 text-lg font-medium mt-6">You will never know everything.<br />But you will know more.</div>
           </div>
         </div>
         {/* Right: Login Form */}
