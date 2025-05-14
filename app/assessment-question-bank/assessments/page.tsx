@@ -25,14 +25,14 @@ export default function ManageAssessments() {
             <p className="text-gray-700 text-center mb-6">Start a new assessment for your class or subject.</p>
             <button className="bg-blue-700 text-white px-8 py-3 rounded-xl font-semibold shadow-lg hover:bg-blue-800 transition text-lg" onClick={() => setShowDialog(true)}>New Assessment</button>
           </div>
-          {/* View Scheduled Card */}
+          {/* Manage Assessment Card */}
           <div className="bg-white/80 backdrop-blur-md rounded-2xl p-10 shadow flex flex-col items-center border border-gray-100">
             <div className="bg-blue-100 p-6 rounded-full mb-6 shadow-lg">
               <FontAwesomeIcon icon={faCalendarAlt} className="text-4xl text-blue-600" />
             </div>
-            <h2 className="font-bold text-xl text-blue-900 mb-2">View Scheduled</h2>
-            <p className="text-gray-700 text-center mb-6">See all upcoming and scheduled assessments.</p>
-            <button className="bg-blue-700 text-white px-8 py-3 rounded-xl font-semibold shadow-lg hover:bg-blue-800 transition text-lg">Scheduled Assessments</button>
+            <h2 className="font-bold text-xl text-blue-900 mb-2">Manage Assessment</h2>
+            <p className="text-gray-700 text-center mb-6">See, edit, and manage all your assessments.</p>
+            <button className="bg-blue-700 text-white px-8 py-3 rounded-xl font-semibold shadow-lg hover:bg-blue-800 transition text-lg" onClick={() => router.push('/assessment-question-bank/assessments/manage-tests')}>Manage Assessments</button>
           </div>
           {/* View Completed Card */}
           <div className="bg-white/80 backdrop-blur-md rounded-2xl p-10 shadow flex flex-col items-center border border-gray-100">
@@ -57,7 +57,7 @@ export default function ManageAssessments() {
               </button>
               <h2 className="text-xl font-semibold text-gray-800 mb-6">Select Assessment Type</h2>
               <div className="flex flex-col gap-3 w-full">
-                <button className="bg-blue-100 text-blue-900 px-5 py-3 rounded-lg font-medium border border-blue-100 hover:bg-blue-200 hover:text-blue-900 transition" onClick={() => { setShowDialog(false); router.push('/assessment-question-bank/assessments/create-test?type=Custom%20Test'); }}>Create Custom Test</button>
+                <button className="bg-blue-100 text-blue-900 px-5 py-3 rounded-lg font-medium border border-blue-100 hover:bg-blue-200 hover:text-blue-900 transition" onClick={() => { setShowDialog(false); router.push('/assessment-question-bank/assessments/mock-create-test'); }}>Create Custom Test</button>
                 <button className="bg-purple-100 text-purple-900 px-5 py-3 rounded-lg font-medium border border-purple-100 hover:bg-purple-200 hover:text-purple-900 transition" onClick={() => {/* handle NEET mock */}}>Create NEET MOCK</button>
                 <button className="bg-green-100 text-green-900 px-5 py-3 rounded-lg font-medium border border-green-100 hover:bg-green-200 hover:text-green-900 transition" onClick={() => {/* handle JEE mock */}}>Create JEE Mock</button>
                 <button className="bg-pink-100 text-pink-900 px-5 py-3 rounded-lg font-medium border border-pink-100 hover:bg-pink-200 hover:text-pink-900 transition" onClick={() => {/* handle PYQ test */}}>Create PYQ test</button>

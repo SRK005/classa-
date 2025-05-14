@@ -2,6 +2,8 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { auth } from "../../components/firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../../lib/firebaseClient";
 
 const modules = [
   {
@@ -73,11 +75,22 @@ export default function ClassaScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (user && user.displayName) {
-        setUserName(user.displayName);
-      } else if (user && user.email) {
-        setUserName(user.email.split("@")[0]);
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        try {
+          const userDoc = await getDoc(doc(db, "users", user.uid));
+          if (userDoc.exists() && userDoc.data().display_name) {
+            setUserName(userDoc.data().display_name);
+          } else if (user.displayName) {
+            setUserName(user.displayName);
+          } else if (user.email) {
+            setUserName(user.email.split("@")[0]);
+          } else {
+            setUserName("User");
+          }
+        } catch (e) {
+          setUserName("User");
+        }
       } else {
         setUserName("User");
       }
@@ -104,7 +117,7 @@ export default function ClassaScreen() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <img src="/assets/images/edueronLogo.png" alt="Logo" className="h-12 w-auto" />
           <div className="text-right">
-            <div className="text-base sm:text-lg md:text-xl font-semibold text-gray-700">Hello, {userName} 👋</div>
+            <div className="text-base sm:text-lg md:text-xl font-semibold text-gray-700">Hi, {userName} 👋</div>
             <div className="text-sm sm:text-base md:text-lg font-medium text-gray-500 mt-2">Please Select The Required Module!</div>
           </div>
         </div>

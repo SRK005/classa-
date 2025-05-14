@@ -30,7 +30,7 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#fdf6f0] to-[#f7e7ee] font-sans relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#e3f0fc] to-[#b6d6f6] font-sans relative overflow-hidden">
       {/* Pastel SVG Blob for extra depth */}
       <svg className="absolute -top-32 -left-32 w-[600px] h-[600px] opacity-40 blur-2xl z-0" viewBox="0 0 600 600" fill="none" xmlns="http://www.w3.org/2000/svg">
         <g filter="url(#filter0_f_1_2)">
@@ -46,7 +46,7 @@ const Login = () => {
             <div className="text-4xl md:text-5xl font-extrabold leading-tight mb-4 text-black relative">
               Manage <span className="relative inline-block">schools</span> as easily<br />as sending a message.
             </div>
-            <div className="text-purple-400 text-lg font-medium mt-6">Organize classes, students, and assessments with ease.</div>
+            <div className="text-[#3B82F6] text-lg font-medium mt-6">Organize classes, students, and assessments with ease.</div>
           </div>
         </div>
         {/* Right: Login Form */}
@@ -80,12 +80,12 @@ const Login = () => {
                 />
                 Remember me
               </label>
-              <a href="#" className="text-purple-500 text-sm hover:underline">Forgot password?</a>
+              <a href="#" className="text-[#3B82F6] text-sm hover:underline">Forgot password?</a>
             </div>
             {error && <div className="text-red-500 text-sm">{error}</div>}
             <button
               type="submit"
-              className="mt-2 bg-purple-200 text-black font-semibold py-2 rounded-xl shadow hover:bg-purple-300 transition text-lg border border-purple-100"
+              className="mt-2 bg-[#3B82F6] text-white font-semibold py-2 rounded-xl shadow hover:bg-[#2563eb] transition text-lg border border-[#3B82F6]"
             >
               Login
             </button>
