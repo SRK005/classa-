@@ -3,11 +3,23 @@
 import * as React from "react";
 import Sidebar from "../../components/Sidebar";
 import { db } from "@/lib/firebaseClient";
-import { collection, query, getDocs, doc, getDoc, updateDoc, deleteDoc, DocumentReference } from "firebase/firestore";
+import {
+  collection,
+  query,
+  getDocs,
+  doc,
+  getDoc,
+  updateDoc,
+  deleteDoc,
+  DocumentReference,
+} from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebaseClient";
-import EdueronQuestionsDialog from "../../components/EdueronQuestionsDialog";
+import SelectQuestionsDialog from "../../components/SelectQuestionsDialog";
+import PDFDownloadButton from "../../pyq/neet/PDFDownloadButton";
+import latexToPngDataUrl from "../../pyq/neet/latexToDataUrl";
+import { Dialog } from "@headlessui/react";
 
 const pastelStatus = {
   published: "bg-blue-100 text-blue-700",
@@ -16,18 +28,48 @@ const pastelStatus = {
   finished: "bg-pink-100 text-pink-700",
 };
 
+// Helper to split text and LaTeX and generate images
+async function splitTextWithLatex(text: string) {
+  const regex = /\$([^$]+)\$/g;
+  let lastIndex = 0;
+  let match;
+  const result: (string | { latex: string; img: string })[] = [];
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      result.push(text.slice(lastIndex, match.index));
+    }
+    const latex = match[1];
+    const img = await latexToPngDataUrl(latex);
+    result.push({ latex, img });
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    result.push(text.slice(lastIndex));
+  }
+  return result;
+}
+
 export default function ManageTestsPage() {
   const [tests, setTests] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
   const router = useRouter();
-  const [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(
+    null
+  );
   const [actionLoading, setActionLoading] = React.useState<string | null>(null);
   const [page, setPage] = React.useState(1);
   const [pageSize] = React.useState(6);
   const [userSchoolId, setUserSchoolId] = React.useState<string | null>(null);
-  const [selectDialogOpen, setSelectDialogOpen] = React.useState<string | null>(null);
-  const [selectedQuestions, setSelectedQuestions] = React.useState<{ [testId: string]: string[] }>({});
+  const [selectDialogOpen, setSelectDialogOpen] = React.useState<string | null>(
+    null
+  );
+  const [selectedQuestions, setSelectedQuestions] = React.useState<{
+    [testId: string]: string[];
+  }>({});
+  const [preparePdfTest, setPreparePdfTest] = React.useState<any | null>(null);
+  const [pdfQuestions, setPdfQuestions] = React.useState<any[]>([]);
+  const [pdfLoading, setPdfLoading] = React.useState(false);
 
   // Fetch current user's schoolID
   React.useEffect(() => {
@@ -67,9 +109,15 @@ export default function ManageTestsPage() {
             end: data.end?.toDate ? data.end.toDate() : data.end,
             status: (data.status || "drafted") as keyof typeof pastelStatus,
             online: data.online,
+            questions: Array.isArray(data.questions) ? data.questions : [],
+            totalQuestions:
+              typeof data.totalQuestions === "number"
+                ? data.totalQuestions
+                : null,
           });
         }
-        setTests(testList);
+        // Filter out published tests (online === true)
+        setTests(testList.filter((t) => !t.online));
       } catch (err: any) {
         setError(err.message || "Failed to fetch tests.");
       } finally {
@@ -85,7 +133,10 @@ export default function ManageTestsPage() {
     return bEnd - aEnd;
   });
   const totalPages = Math.ceil(sortedTests.length / pageSize);
-  const paginatedTests = sortedTests.slice((page - 1) * pageSize, page * pageSize);
+  const paginatedTests = sortedTests.slice(
+    (page - 1) * pageSize,
+    page * pageSize
+  );
 
   const handleDelete = async (id: string) => {
     setActionLoading(id);
@@ -104,12 +155,126 @@ export default function ManageTestsPage() {
     setActionLoading(id);
     try {
       await updateDoc(doc(db, "test", id), { online: true });
-      setTests((prev) => prev.map((t) => t.id === id ? { ...t, status: "published", online: true } : t));
+      setTests((prev) =>
+        prev.map((t) =>
+          t.id === id ? { ...t, status: "published", online: true } : t
+        )
+      );
     } catch (err) {
       alert("Failed to publish test.");
     } finally {
       setActionLoading(null);
     }
+  };
+
+  // Handler to prepare questions with LaTeX images for PDF
+  const handlePreparePdf = async (test: any) => {
+    setPreparePdfTest(test);
+    setPdfLoading(true);
+    // If questions are DocumentReferences, fetch their data
+    let questionsData = [];
+    if (
+      test.questions &&
+      test.questions.length > 0 &&
+      typeof test.questions[0] === "object" &&
+      test.questions[0].path
+    ) {
+      // Firestore DocumentReferences
+      questionsData = await Promise.all(
+        test.questions.map(async (qRef: any) => {
+          const qSnap = await getDoc(qRef);
+          const d = (qSnap.data() as any) || {};
+          return {
+            id: qSnap.id,
+            question: d.questionText || d.question || "",
+            optionA: d.optionA || "",
+            optionB: d.optionB || "",
+            optionC: d.optionC || "",
+            optionD: d.optionD || "",
+            correct: d.correct || "",
+            explanation: d.explanation || "",
+            solution: d.solution || "",
+            difficulty: d.difficulty || "",
+            bloom: d.bloom || "",
+            questionLatex: d.questionLatex || "",
+            optionALatex: d.optionALatex || "",
+            optionBLatex: d.optionBLatex || "",
+            optionCLatex: d.optionCLatex || "",
+            optionDLatex: d.optionDLatex || "",
+          };
+        })
+      );
+    } else {
+      // Already have question data
+      questionsData = (test.questions || []).map((q: any) => ({
+        id: q.id,
+        question: q.questionText || q.question || "",
+        optionA: q.optionA || "",
+        optionB: q.optionB || "",
+        optionC: q.optionC || "",
+        optionD: q.optionD || "",
+        correct: q.correct || "",
+        explanation: q.explanation || "",
+        solution: q.solution || "",
+        difficulty: q.difficulty || "",
+        bloom: q.bloom || "",
+        questionLatex: q.questionLatex || "",
+        optionALatex: q.optionALatex || "",
+        optionBLatex: q.optionBLatex || "",
+        optionCLatex: q.optionCLatex || "",
+        optionDLatex: q.optionDLatex || "",
+      }));
+    }
+    // Prepare questions with LaTeX images
+    const questionsWithLatex = await Promise.all(
+      questionsData.map(async (q: any) => {
+        let questionLatexImg = null;
+        if (q.questionLatex && q.questionLatex.trim()) {
+          questionLatexImg = await latexToPngDataUrl(q.questionLatex);
+          console.log("LaTeX Q:", q.questionLatex, "->", questionLatexImg);
+        }
+        let optionALatexImg = null;
+        if (q.optionALatex && q.optionALatex.trim()) {
+          optionALatexImg = await latexToPngDataUrl(q.optionALatex);
+          console.log("LaTeX A:", q.optionALatex, "->", optionALatexImg);
+        }
+        let optionBLatexImg = null;
+        if (q.optionBLatex && q.optionBLatex.trim()) {
+          optionBLatexImg = await latexToPngDataUrl(q.optionBLatex);
+          console.log("LaTeX B:", q.optionBLatex, "->", optionBLatexImg);
+        }
+        let optionCLatexImg = null;
+        if (q.optionCLatex && q.optionCLatex.trim()) {
+          optionCLatexImg = await latexToPngDataUrl(q.optionCLatex);
+          console.log("LaTeX C:", q.optionCLatex, "->", optionCLatexImg);
+        }
+        let optionDLatexImg = null;
+        if (q.optionDLatex && q.optionDLatex.trim()) {
+          optionDLatexImg = await latexToPngDataUrl(q.optionDLatex);
+          console.log("LaTeX D:", q.optionDLatex, "->", optionDLatexImg);
+        }
+        const questionParts = await splitTextWithLatex(q.question || "");
+        const optionAParts = await splitTextWithLatex(q.optionA || "");
+        const optionBParts = await splitTextWithLatex(q.optionB || "");
+        const optionCParts = await splitTextWithLatex(q.optionC || "");
+        const optionDParts = await splitTextWithLatex(q.optionD || "");
+        return {
+          ...q,
+          questionLatexImg,
+          optionALatexImg,
+          optionBLatexImg,
+          optionCLatexImg,
+          optionDLatexImg,
+          questionParts,
+          optionAParts,
+          optionBParts,
+          optionCParts,
+          optionDParts,
+        };
+      })
+    );
+    setPdfQuestions(questionsWithLatex);
+    setPdfLoading(false);
   };
 
   return (
@@ -120,88 +285,160 @@ export default function ManageTestsPage() {
           <button
             className="mb-4 px-4 py-2 rounded bg-gray-200 text-gray-700 font-semibold hover:bg-gray-300"
             onClick={() => {
-              if (userSchoolId && typeof userSchoolId === 'object' && 'path' in userSchoolId && 'id' in userSchoolId) {
+              if (
+                userSchoolId &&
+                typeof userSchoolId === "object" &&
+                "path" in userSchoolId &&
+                "id" in userSchoolId
+              ) {
                 const ref = userSchoolId as any;
-                console.log('Debug schoolId:', ref);
-                alert('schoolId path: ' + ref.path + '\nschoolId id: ' + ref.id);
+                console.log("Debug schoolId:", ref);
+                alert(
+                  "schoolId path: " + ref.path + "\nschoolId id: " + ref.id
+                );
               } else {
-                alert('schoolId: ' + userSchoolId);
+                alert("schoolId: " + userSchoolId);
               }
             }}
           >
             Debug: Show Auth User SchoolID
           </button>
-          <h1 className="text-3xl font-extrabold text-blue-700 mb-6 text-center">Manage Tests</h1>
-          {error && <div className="text-red-500 text-center mb-4">{error}</div>}
+          <h1 className="text-3xl font-extrabold text-blue-700 mb-6 text-center">
+            Manage Tests
+          </h1>
+          {error && (
+            <div className="text-red-500 text-center mb-4">{error}</div>
+          )}
           {loading ? (
-            <div className="flex justify-center items-center h-40"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div></div>
+            <div className="flex justify-center items-center h-40">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {paginatedTests.map((test: { id: string; name: string; className: string; start: any; end: any; status: keyof typeof pastelStatus; online?: boolean }) => (
-                <div key={test.id} className="bg-white/80 rounded-2xl shadow p-6 border border-blue-100 flex flex-col gap-3">
-                  <div className="flex items-center justify-between">
-                    <div className="text-xl font-bold text-blue-800">{test.name}</div>
-                    {/* Status badge: revert to original logic and styling */}
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${pastelStatus[test.status] || pastelStatus.drafted}`}>{test.status.charAt(0).toUpperCase() + test.status.slice(1)}</span>
-                  </div>
-                  <div className="flex flex-wrap gap-4 text-sm text-blue-900">
-                    <div><span className="font-semibold">Class:</span> {test.className}</div>
-                    <div><span className="font-semibold">Start:</span> {test.start ? new Date(test.start).toLocaleString() : '-'}</div>
-                    <div><span className="font-semibold">End:</span> {test.end ? new Date(test.end).toLocaleString() : '-'}</div>
-                  </div>
-                  <div className="flex flex-col gap-2 mt-2 items-center">
-                    {/* First row: First two buttons */}
-                    <div className="flex flex-wrap gap-3 w-full justify-start">
-                      <button className="px-4 py-2 rounded-xl font-semibold shadow-sm border border-blue-200 bg-white text-blue-700 hover:bg-blue-50 focus:ring-2 focus:ring-blue-200 transition" onClick={() => setSelectDialogOpen(test.id)}>
-                        Select Questions
-                      </button>
-                      <button className="px-4 py-2 rounded-xl font-semibold shadow-sm border border-purple-200 bg-white text-purple-700 hover:bg-purple-50 focus:ring-2 focus:ring-purple-200 transition" onClick={() => {/* Prepare PDF */}}>
-                        Prepare PDF
-                      </button>
-                    </div>
-                    {/* Horizontal divider */}
-                    <hr className="my-2 border-gray-200 w-full" />
-                    {/* Second row: Last three buttons */}
-                    <div className="flex flex-wrap gap-3 w-full justify-start">
-                      <button className="px-4 py-2 rounded-xl font-semibold shadow-sm border border-green-200 bg-white text-green-700 hover:bg-green-50 focus:ring-2 focus:ring-green-200 transition" onClick={() => {/* Generate Report */}}>
-                        Generate Report
-                      </button>
-                      <button
-                        className={`px-4 py-2 rounded-xl font-semibold shadow-sm border transition ${test.online ? 'bg-blue-900 text-white border-blue-900 cursor-default' : 'border-pink-200 bg-white text-pink-700 hover:bg-pink-50 focus:ring-2 focus:ring-pink-200'}`}
-                        onClick={() => handlePublish(test.id)}
-                        disabled={test.online || actionLoading === test.id}
+              {paginatedTests.map(
+                (test: {
+                  id: string;
+                  name: string;
+                  className: string;
+                  start: any;
+                  end: any;
+                  status: keyof typeof pastelStatus;
+                  online?: boolean;
+                  questions?: any[];
+                  totalQuestions?: number | null;
+                }) => (
+                  <div
+                    key={test.id}
+                    className="bg-white/80 rounded-2xl shadow p-6 border border-blue-100 flex flex-col gap-3 relative"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="text-xl font-bold text-blue-800">
+                        {test.name}
+                      </div>
+                      {/* Status badge: revert to original logic and styling */}
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                          pastelStatus[test.status] || pastelStatus.drafted
+                        }`}
                       >
-                        {actionLoading === test.id ? <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white inline-block mr-2"></span> : null}
-                        {test.online ? "Published" : "Publish"}
-                      </button>
-                      <button
-                        className="px-4 py-2 rounded-xl font-semibold shadow-sm border border-red-200 bg-white text-red-700 hover:bg-red-50 focus:ring-2 focus:ring-red-200 transition"
-                        onClick={() => setConfirmDeleteId(test.id)}
-                        disabled={actionLoading === test.id}
-                      >
-                        {actionLoading === test.id ? <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-400 inline-block mr-2"></span> : null}
-                        Delete
-                      </button>
+                        {test.status.charAt(0).toUpperCase() +
+                          test.status.slice(1)}
+                      </span>
                     </div>
+                    <div className="flex flex-wrap gap-4 text-sm text-blue-900">
+                      <div>
+                        <span className="font-semibold">Class:</span>{" "}
+                        {test.className}
+                      </div>
+                      <div>
+                        <span className="font-semibold">Start:</span>{" "}
+                        {test.start
+                          ? new Date(test.start).toLocaleString()
+                          : "-"}
+                      </div>
+                      <div>
+                        <span className="font-semibold">End:</span>{" "}
+                        {test.end ? new Date(test.end).toLocaleString() : "-"}
+                      </div>
+                      <div>
+                        <span className="font-semibold">Questions:</span>{" "}
+                        {test.questions ? test.questions.length : 0}
+                        {typeof test.totalQuestions === "number"
+                          ? ` / ${test.totalQuestions}`
+                          : ""}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2 mt-2 items-center">
+                      {/* First row: First two buttons */}
+                      <div className="flex flex-wrap gap-3 w-full justify-start">
+                        <button
+                          className="px-4 py-2 rounded-xl font-semibold shadow-sm border border-blue-200 bg-white text-blue-700 hover:bg-blue-50 focus:ring-2 focus:ring-blue-200 transition"
+                          onClick={() => setSelectDialogOpen(test.id)}
+                        >
+                          Select Questions
+                        </button>
+                        <button
+                          className="px-4 py-2 rounded-xl font-semibold shadow-sm border border-purple-200 bg-white text-purple-700 hover:bg-purple-50 focus:ring-2 focus:ring-purple-200 transition"
+                          onClick={() => handlePreparePdf(test)}
+                        >
+                          Prepare PDF
+                        </button>
+                      </div>
+                      {/* Horizontal divider */}
+                      <hr className="my-2 border-gray-200 w-full" />
+                      {/* Second row: Last two buttons (Publish, Delete) */}
+                      <div className="flex flex-wrap gap-3 w-full justify-start">
+                        <button
+                          className={`px-4 py-2 rounded-xl font-semibold shadow-sm border transition ${
+                            test.online
+                              ? "bg-blue-900 text-white border-blue-900 cursor-default"
+                              : "border-pink-200 bg-white text-pink-700 hover:bg-pink-50 focus:ring-2 focus:ring-pink-200"
+                          }`}
+                          onClick={() => handlePublish(test.id)}
+                          disabled={test.online || actionLoading === test.id}
+                        >
+                          {actionLoading === test.id ? (
+                            <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white inline-block mr-2"></span>
+                          ) : null}
+                          {test.online ? "Published" : "Publish"}
+                        </button>
+                        <button
+                          className="px-4 py-2 rounded-xl font-semibold shadow-sm border border-red-200 bg-white text-red-700 hover:bg-red-50 focus:ring-2 focus:ring-red-200 transition"
+                          onClick={() => setConfirmDeleteId(test.id)}
+                          disabled={actionLoading === test.id}
+                        >
+                          {actionLoading === test.id ? (
+                            <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-400 inline-block mr-2"></span>
+                          ) : null}
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                    {/* SelectQuestionsDialog for this test */}
+                    {selectDialogOpen === test.id && (
+                      <SelectQuestionsDialog
+                        open={true}
+                        onClose={() => setSelectDialogOpen(null)}
+                        onUpdate={(selected) => {
+                          setSelectedQuestions((prev) => ({
+                            ...prev,
+                            [test.id]: selected,
+                          }));
+                          setSelectDialogOpen(null);
+                          // Optionally, update Firestore here
+                        }}
+                        initialSelected={selectedQuestions[test.id] || []}
+                        schoolId={userSchoolId}
+                        testId={doc(db, "test", test.id)}
+                      />
+                    )}
                   </div>
-                  {/* EdueronQuestionsDialog for this test */}
-                  {selectDialogOpen === test.id && (
-                    <EdueronQuestionsDialog
-                      open={true}
-                      onClose={() => setSelectDialogOpen(null)}
-                      onUpdate={(selected) => {
-                        setSelectedQuestions((prev) => ({ ...prev, [test.id]: selected }));
-                        setSelectDialogOpen(null);
-                        // Optionally, update Firestore here
-                      }}
-                      initialSelected={selectedQuestions[test.id] || []}
-                      schoolId={userSchoolId}
-                    />
-                  )}
-                </div>
-              ))}
+                )
+              )}
               {tests.length === 0 && (
-                <div className="col-span-full text-center text-blue-400 py-10">No tests found.</div>
+                <div className="col-span-full text-center text-blue-400 py-10">
+                  No tests found.
+                </div>
               )}
             </div>
           )}
@@ -215,7 +452,9 @@ export default function ManageTestsPage() {
               >
                 Previous
               </button>
-              <span className="text-blue-700 font-medium">Page {page} of {totalPages}</span>
+              <span className="text-blue-700 font-medium">
+                Page {page} of {totalPages}
+              </span>
               <button
                 className="px-4 py-2 rounded-lg font-semibold border border-blue-200 bg-white text-blue-700 hover:bg-blue-50 disabled:opacity-50"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
@@ -231,8 +470,13 @@ export default function ManageTestsPage() {
       {confirmDeleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/60 backdrop-blur-md">
           <div className="bg-white/90 rounded-2xl shadow-2xl p-8 w-full max-w-md relative border border-blue-100 flex flex-col items-center">
-            <h2 className="text-2xl font-bold text-red-700 mb-4">Delete Test?</h2>
-            <p className="text-blue-700 mb-6 text-center">Are you sure you want to delete this test? This action cannot be undone.</p>
+            <h2 className="text-2xl font-bold text-red-700 mb-4">
+              Delete Test?
+            </h2>
+            <p className="text-blue-700 mb-6 text-center">
+              Are you sure you want to delete this test? This action cannot be
+              undone.
+            </p>
             <div className="flex gap-4">
               <button
                 className="px-6 py-2 rounded-xl font-bold shadow-sm border border-gray-200 bg-white text-gray-700 hover:bg-gray-100 focus:ring-2 focus:ring-gray-200 transition"
@@ -245,13 +489,43 @@ export default function ManageTestsPage() {
                 onClick={() => handleDelete(confirmDeleteId)}
                 disabled={actionLoading === confirmDeleteId}
               >
-                {actionLoading === confirmDeleteId ? <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white inline-block mr-2"></span> : null}
+                {actionLoading === confirmDeleteId ? (
+                  <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white inline-block mr-2"></span>
+                ) : null}
                 Delete
               </button>
             </div>
           </div>
         </div>
       )}
+      {/* Prepare PDF Dialog */}
+      {preparePdfTest && (
+        <Dialog
+          open={!!preparePdfTest}
+          onClose={() => setPreparePdfTest(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+        >
+          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-2xl relative border border-blue-100 flex flex-col items-center">
+            <h2 className="text-xl font-bold mb-4">
+              Download PDF for {preparePdfTest.name}
+            </h2>
+            {pdfLoading ? (
+              <div className="flex justify-center items-center h-32">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>{" "}
+                Preparing PDF...
+              </div>
+            ) : (
+              <PDFDownloadButton questions={pdfQuestions} viewYear={2024} />
+            )}
+            <button
+              className="mt-4 px-4 py-2 rounded bg-gray-200 text-gray-700 font-semibold hover:bg-gray-300"
+              onClick={() => setPreparePdfTest(null)}
+            >
+              Close
+            </button>
+          </div>
+        </Dialog>
+      )}
     </div>
   );
-} 
+}

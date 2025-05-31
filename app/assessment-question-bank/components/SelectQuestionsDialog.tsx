@@ -3,6 +3,7 @@ import { db } from '../../../lib/firebaseClient';
 import { collection, query, where, getDocs, doc, Query, DocumentReference } from 'firebase/firestore';
 import { BlockMath, InlineMath } from 'react-katex';
 import 'katex/dist/katex.min.css';
+import SenseAIPickDialog from "./SenseAIPickDialog";
 
 interface Question {
   id: string;
@@ -23,15 +24,17 @@ interface FilterEntity {
   name: string;
 }
 
-interface SelectQuestionsDialogProps {
+interface EdueronQuestionsDialogProps {
   open: boolean;
   onClose: () => void;
   onUpdate: (selected: string[]) => void;
   initialSelected?: string[];
+  classId?: string;
+  schoolId?: string | null;
+  testId?: DocumentReference;
 }
 
 const QUESTIONS_PER_PAGE = 10;
-const CACHE_TTL = 31 * 24 * 60 * 60 * 1000;
 
 function renderWithLatex(text: string) {
   if (/^\$.*\$$/.test(text?.trim() || '')) {
@@ -62,7 +65,7 @@ function getTagColor(type: string, value: string) {
   return 'bg-gray-100 text-gray-800';
 }
 
-const SelectQuestionsDialog: React.FC<SelectQuestionsDialogProps> = ({ open, onClose, onUpdate, initialSelected = [] }) => {
+const EdueronQuestionsDialog: React.FC<EdueronQuestionsDialogProps> = ({ open, onClose, onUpdate, initialSelected = [], classId, schoolId, testId }) => {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -80,81 +83,131 @@ const SelectQuestionsDialog: React.FC<SelectQuestionsDialogProps> = ({ open, onC
   const [class12Id, setClass12Id] = useState<string>('');
   const [explanationOpen, setExplanationOpen] = useState<string | null>(null);
   const [explanationContent, setExplanationContent] = useState<{explanation?: string, solution?: string}>({});
+  const [spValue, setSpValue] = useState(true);
+  const [senseAIPickOpen, setSenseAIPickOpen] = useState(false);
 
   // Fetch classes
   useEffect(() => {
     async function fetchClasses() {
-      const q = query(collection(db, 'classes'), where('sp', '==', true));
-      const snap = await getDocs(q);
-      const classList = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name || '' }));
-      setClasses(classList);
-      const class11 = classList.find(c => c.name?.toString().includes('11'));
-      const class12 = classList.find(c => c.name?.toString().includes('12'));
-      setClass11Id(class11?.id || '');
-      setClass12Id(class12?.id || '');
+      let q;
+      try {
+        // Filter by schoolId if viewing school questions
+        if (!spValue && schoolId) {
+          q = query(collection(db, 'classes'), where('schoolID', '==', schoolId));
+        } else {
+          q = query(collection(db, 'classes'), where('sp', '==', true));
+        }
+        const snap = await getDocs(q);
+        const classList = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name || '' }));
+        setClasses(classList);
+        // Optional debug
+        // console.log('Fetched classes:', classList);
+        const class11 = classList.find(c => c.name?.toString().includes('11'));
+        const class12 = classList.find(c => c.name?.toString().includes('12'));
+        setClass11Id(class11?.id || '');
+        setClass12Id(class12?.id || '');
+      } catch (err) {
+        console.error('Error fetching classes:', err);
+      }
     }
-    if (open) fetchClasses();
-  }, [open]);
+    if (open && (spValue || schoolId)) fetchClasses();
+  }, [open, spValue, schoolId]);
 
   // Fetch subjects
   useEffect(() => {
-    if (!selectedClass) { setSubjects([]); setSelectedSubject(''); return; }
+    if (!selectedClass && !classId) { setSubjects([]); setSelectedSubject(''); return; }
     async function fetchSubjects() {
-      const classRef = doc(db, 'classes', selectedClass);
+      const classRef = doc(db, 'classes', classId || selectedClass);
       let q;
-      if (selectedClass === class11Id && class12Id) {
-        const class11Ref = doc(db, 'classes', class11Id);
-        const class12Ref = doc(db, 'classes', class12Id);
-        q = query(collection(db, 'subjects'), where('sp', '==', true), where('classID', 'in', [class11Ref, class12Ref]));
-      } else {
-        q = query(collection(db, 'subjects'), where('sp', '==', true), where('classID', '==', classRef));
+      try {
+        // Filter by schoolId if viewing school questions
+        if (!spValue && schoolId) {
+          q = query(collection(db, 'subjects'), where('classID', '==', classRef), where('schoolID', '==', schoolId));
+        } else {
+          q = query(collection(db, 'subjects'), where('classID', '==', classRef));
+          if (spValue) q = query(q, where('sp', '==', true));
+          else q = query(q, where('sp', '==', false));
+        }
+        const snap = await getDocs(q);
+        const subjectList = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name || '' }));
+        setSubjects(subjectList);
+        // Optional debug
+        // console.log('Fetched subjects:', subjectList);
+      } catch (err) {
+        console.error('Error fetching subjects:', err);
       }
-      const snap = await getDocs(q);
-      const subjectList = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name || '' }));
-      setSubjects(subjectList);
     }
-    fetchSubjects();
-  }, [selectedClass, class11Id, class12Id]);
+    if (spValue || schoolId) fetchSubjects();
+  }, [selectedClass, classId, spValue, schoolId]);
 
   // Fetch chapters
   useEffect(() => {
     if (!selectedSubject) { setChapters([]); setSelectedChapter(''); return; }
     async function fetchChapters() {
-      const q = query(collection(db, 'chapters'), where('sp', '==', true), where('subjectID', '==', doc(db, 'subjects', selectedSubject)));
-      const snap = await getDocs(q);
-      const chapterList = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name || '' }));
-      setChapters(chapterList);
+      let q;
+      try {
+        // Filter by schoolId if viewing school questions
+        if (!spValue && schoolId) {
+          q = query(collection(db, 'chapters'), where('subjectID', '==', doc(db, 'subjects', selectedSubject)), where('schoolID', '==', schoolId));
+        } else {
+          q = query(collection(db, 'chapters'), where('sp', '==', true), where('subjectID', '==', doc(db, 'subjects', selectedSubject)));
+        }
+        const snap = await getDocs(q);
+        const chapterList = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name || '' }));
+        setChapters(chapterList);
+        // Optional debug
+        // console.log('Fetched chapters:', chapterList);
+      } catch (err) {
+        console.error('Error fetching chapters:', err);
+      }
     }
-    fetchChapters();
-  }, [selectedSubject]);
+    if (spValue || schoolId) fetchChapters();
+  }, [selectedSubject, spValue, schoolId]);
 
   // Fetch lessons
   useEffect(() => {
     if (!selectedChapter) { setLessons([]); setSelectedLesson(''); return; }
     async function fetchLessons() {
-      const q = query(collection(db, 'lessons'), where('sp', '==', true), where('chapterID', '==', doc(db, 'chapters', selectedChapter)));
-      const snap = await getDocs(q);
-      const lessonList = snap.docs.map(doc => ({ id: doc.id, name: doc.data().title || doc.data().name || '' }));
-      setLessons(lessonList);
+      let q;
+      try {
+        // Filter by schoolId if viewing school questions
+        if (!spValue && schoolId) {
+          q = query(collection(db, 'lessons'), where('chapterID', '==', doc(db, 'chapters', selectedChapter)), where('schoolID', '==', schoolId));
+        } else {
+          q = query(collection(db, 'lessons'), where('sp', '==', true), where('chapterID', '==', doc(db, 'chapters', selectedChapter)));
+        }
+        const snap = await getDocs(q);
+        const lessonList = snap.docs.map(doc => ({ id: doc.id, name: doc.data().title || doc.data().name || '' }));
+        setLessons(lessonList);
+        // Optional debug
+        // console.log('Fetched lessons:', lessonList);
+      } catch (err) {
+        console.error('Error fetching lessons:', err);
+      }
     }
-    fetchLessons();
-  }, [selectedChapter]);
+    if (spValue || schoolId) fetchLessons();
+  }, [selectedChapter, spValue, schoolId]);
 
   // Fetch questions
   useEffect(() => {
     async function fetchQuestions() {
       setLoading(true);
-      let q: Query = query(collection(db, 'questionCollection'), where('sp', '==', true));
-      if (selectedLesson) q = query(q, where('lessonID', '==', doc(db, 'lessons', selectedLesson)));
-      else if (selectedChapter) q = query(q, where('chapterID', '==', doc(db, 'chapters', selectedChapter)));
-      else if (selectedSubject) q = query(q, where('subjectID', '==', doc(db, 'subjects', selectedSubject)));
-      else if (selectedClass) {
-        const classRef = doc(db, 'classes', selectedClass);
-        if (selectedClass === class11Id && class12Id) {
-          const class11Ref = doc(db, 'classes', class11Id);
-          const class12Ref = doc(db, 'classes', class12Id);
-          q = query(q, where('classID', 'in', [class11Ref, class12Ref]));
-        } else {
+      let q: Query = query(collection(db, 'questionCollection'), where('sp', '==', spValue));
+      if (!spValue && schoolId) {
+        q = query(collection(db, 'questionCollection'), where('schoolID', '==', schoolId));
+        if (selectedLesson) q = query(q, where('lessonID', '==', doc(db, 'lessons', selectedLesson)));
+        else if (selectedChapter) q = query(q, where('chapterID', '==', doc(db, 'chapters', selectedChapter)));
+        else if (selectedSubject) q = query(q, where('subjectID', '==', doc(db, 'subjects', selectedSubject)));
+        else if (classId || selectedClass) {
+          const classRef = doc(db, 'classes', classId || selectedClass);
+          q = query(q, where('classID', '==', classRef));
+        }
+      } else {
+        if (selectedLesson) q = query(q, where('lessonID', '==', doc(db, 'lessons', selectedLesson)));
+        else if (selectedChapter) q = query(q, where('chapterID', '==', doc(db, 'chapters', selectedChapter)));
+        else if (selectedSubject) q = query(q, where('subjectID', '==', doc(db, 'subjects', selectedSubject)));
+        else if (classId || selectedClass) {
+          const classRef = doc(db, 'classes', classId || selectedClass);
           q = query(q, where('classID', '==', classRef));
         }
       }
@@ -179,7 +232,7 @@ const SelectQuestionsDialog: React.FC<SelectQuestionsDialogProps> = ({ open, onC
       setLoading(false);
     }
     if (open) fetchQuestions();
-  }, [open, selectedClass, selectedSubject, selectedChapter, selectedLesson, class11Id, class12Id]);
+  }, [open, selectedClass, selectedSubject, selectedChapter, selectedLesson, classId, spValue, schoolId]);
 
   // Multi-page selection: keep across pages
   useEffect(() => {
@@ -193,11 +246,14 @@ const SelectQuestionsDialog: React.FC<SelectQuestionsDialogProps> = ({ open, onC
     setSelected(prev => prev.includes(id) ? prev.filter(qid => qid !== id) : [...prev, id]);
   };
 
+  // Counter for selected questions
+  const selectedCount = selected.length;
+
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-3xl w-full relative animate-fade-in border border-gray-200">
+      <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-7xl w-[98vw] max-h-[90vh] overflow-y-auto relative animate-fade-in border border-gray-200">
         <button
           className="absolute top-3 right-3 text-gray-400 hover:text-gray-700 text-2xl font-bold"
           onClick={onClose}
@@ -205,19 +261,50 @@ const SelectQuestionsDialog: React.FC<SelectQuestionsDialogProps> = ({ open, onC
         >
           &times;
         </button>
-        <h2 className="text-2xl font-bold mb-4 text-blue-700">Select Questions</h2>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-4">
+          <h2 className="text-2xl font-bold text-blue-700 flex items-center gap-2">
+            Select Questions
+            {/* Debug icon for testId */}
+            {testId && (
+              <button
+                className="p-1 ml-2 text-blue-400 hover:text-blue-700 rounded-full border border-blue-100 bg-white"
+                title="Debug: Log testId DocumentReference"
+                onClick={() => console.log('testId DocumentReference:', testId)}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12H9m12 0A9 9 0 11 3 12a9 9 0 0118 0z" />
+                </svg>
+              </button>
+            )}
+          </h2>
+          <div className="flex items-center gap-6">
+            <span className="text-blue-700 font-semibold text-lg">Selected: {selectedCount}</span>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1 cursor-pointer">
+                <input type="radio" name="sp" checked={spValue} onChange={() => setSpValue(true)} className="accent-blue-600" />
+                <span className="text-blue-700">View Edueron Questions</span>
+              </label>
+              <label className="flex items-center gap-1 cursor-pointer">
+                <input type="radio" name="sp" checked={!spValue} onChange={() => setSpValue(false)} className="accent-blue-600" />
+                <span className="text-blue-700">View School Questions</span>
+              </label>
+            </div>
+          </div>
+        </div>
         {/* Filters */}
         <div className="flex flex-wrap gap-4 mb-6">
-          <div className="flex flex-col">
-            <label className="mb-1 text-sm font-medium text-gray-700">Class</label>
-            <select className="px-4 py-2 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition text-gray-800 bg-white" value={selectedClass} onChange={e => { setSelectedClass(e.target.value); setSelectedSubject(''); setSelectedChapter(''); setSelectedLesson(''); }}>
-              <option value="">Select Class</option>
-              {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
+          {!classId && (
+            <div className="flex flex-col">
+              <label className="mb-1 text-sm font-medium text-gray-700">Class</label>
+              <select className="px-4 py-2 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition text-gray-800 bg-white" value={selectedClass} onChange={e => { setSelectedClass(e.target.value); setSelectedSubject(''); setSelectedChapter(''); setSelectedLesson(''); }}>
+                <option value="">Select Class</option>
+                {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
           <div className="flex flex-col">
             <label className="mb-1 text-sm font-medium text-gray-700">Subject</label>
-            <select className="px-4 py-2 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition text-gray-800 bg-white" value={selectedSubject} onChange={e => { setSelectedSubject(e.target.value); setSelectedChapter(''); setSelectedLesson(''); }} disabled={!selectedClass}>
+            <select className="px-4 py-2 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition text-gray-800 bg-white" value={selectedSubject} onChange={e => { setSelectedSubject(e.target.value); setSelectedChapter(''); setSelectedLesson(''); }} disabled={!(classId || selectedClass)}>
               <option value="">Select Subject</option>
               {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
@@ -248,16 +335,21 @@ const SelectQuestionsDialog: React.FC<SelectQuestionsDialogProps> = ({ open, onC
           <div className="text-gray-400">No questions found.</div>
         ) : (
           <>
-            <div className="space-y-8 max-h-[400px] overflow-y-auto">
+            <div className="space-y-8 max-h-[50vh] overflow-y-auto">
               {paginatedQuestions.map((q, idx) => {
+                const isChecked = selected.includes(q.id);
                 const isCorrect = (option: string) => option.trim().toLowerCase() === (q.correct || '').trim().toLowerCase();
                 return (
                   <div key={q.id} className="bg-white rounded-xl shadow p-6 border border-gray-100 text-left relative">
                     <input
                       type="checkbox"
                       className="absolute top-4 right-4 w-5 h-5 accent-blue-600"
-                      checked={selected.includes(q.id)}
-                      onChange={() => handleCheckbox(q.id)}
+                      checked={isChecked}
+                      onChange={() => {
+                        setSelected(prev =>
+                          isChecked ? prev.filter(qid => qid !== q.id) : [...prev, q.id]
+                        );
+                      }}
                     />
                     <div className="flex flex-wrap gap-2 mb-2">
                       {q.difficulty && (
@@ -300,10 +392,10 @@ const SelectQuestionsDialog: React.FC<SelectQuestionsDialogProps> = ({ open, onC
             </div>
             <div className="flex justify-end mt-8">
               <button
-                className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-blue-700 transition text-lg"
-                onClick={() => onUpdate(selected)}
+                className="bg-purple-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-purple-700 transition text-lg"
+                onClick={() => setSenseAIPickOpen(true)}
               >
-                Update Questions
+                SenseAI Pick
               </button>
             </div>
           </>
@@ -342,9 +434,19 @@ const SelectQuestionsDialog: React.FC<SelectQuestionsDialogProps> = ({ open, onC
             </div>
           </div>
         )}
+        <SenseAIPickDialog
+          open={senseAIPickOpen}
+          onClose={() => setSenseAIPickOpen(false)}
+          onSenseAIPick={(selected) => {
+            setSelected(selected);
+            setSenseAIPickOpen(false);
+          }}
+          classId={classId}
+          testId={testId}
+        />
       </div>
     </div>
   );
 };
 
-export default SelectQuestionsDialog; 
+export default EdueronQuestionsDialog; 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Page, Text, View, Document, StyleSheet, Image } from '@react-pdf/renderer';
+import latexToPngDataUrl from './latexToDataUrl';
 
 const styles = StyleSheet.create({
   page: {
@@ -43,6 +44,21 @@ function chunkArray(array: any[], size: number) {
   return result;
 }
 
+// Helper to render preprocessed parts
+function RenderParts(parts: (string | { latex: string, img: string })[]) {
+  return (
+    <>
+      {parts.map((part, i) =>
+        typeof part === 'string'
+          ? <Text key={i}>{part}</Text>
+          : part.img
+            ? <Image key={i} src={part.img} style={{ width: 40, height: 18, marginBottom: -2, marginLeft: 2, marginRight: 2 }} />
+            : <Text key={i}>{`$${part.latex}$`}</Text>
+      )}
+    </>
+  );
+}
+
 export default function QuestionPaperPDF({ questions, viewYear }: { questions: any[], viewYear: number }) {
   const questionPairs = chunkArray(questions, 2);
 
@@ -53,21 +69,21 @@ export default function QuestionPaperPDF({ questions, viewYear }: { questions: a
           <View style={styles.row} key={rowIdx}>
             {pair.map((q, colIdx) => (
               <View style={styles.questionCol} key={q.id}>
-                {/* Render question: LaTeX as image if available, else as text */}
+                {/* Render question: LaTeX as image if available, else as preprocessed parts */}
                 {q.questionLatexImg ? (
                   <Image src={q.questionLatexImg} style={styles.latexImg} />
                 ) : (
-                  <Text style={styles.question}>{rowIdx * 2 + colIdx + 1}. {q.question}</Text>
+                  <Text style={styles.question}>{rowIdx * 2 + colIdx + 1}. {RenderParts(q.questionParts || [])}</Text>
                 )}
-                {/* Render options: LaTeX as image if available, else as text */}
+                {/* Render options: LaTeX as image if available, else as preprocessed parts */}
                 {['A', 'B', 'C', 'D'].map(opt => {
                   const imgKey = `option${opt}LatexImg`;
-                  const optText = q[`option${opt}`];
+                  const partsKey = `option${opt}Parts`;
                   return q[imgKey] ? (
                     <Image key={opt} src={q[imgKey]} style={styles.latexImg} />
                   ) : (
                     <Text key={opt} style={styles.option}>
-                      ({opt}) {optText}
+                      ({opt}) {RenderParts(q[partsKey] || [])}
                     </Text>
                   );
                 })}

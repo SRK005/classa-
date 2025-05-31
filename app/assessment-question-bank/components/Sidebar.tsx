@@ -1,15 +1,37 @@
+"use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChartBar, faBook, faTasks, faSignOutAlt } from "@fortawesome/free-solid-svg-icons";
+import {
+  faChartBar,
+  faBook,
+  faTasks,
+  faSignOutAlt,
+} from "@fortawesome/free-solid-svg-icons";
 import { signOut } from "firebase/auth";
 import { auth } from "../../../lib/firebaseClient";
 
 const navItems = [
-  { name: "Dashboard", icon: faChartBar, href: "/assessment-question-bank/dashboard" },
-  { name: "Question Bank", icon: faBook, href: "/assessment-question-bank/question-bank" },
-  { name: "Assessments", icon: faTasks, href: "/assessment-question-bank/assessments" },
-  { name: "Results", icon: faChartBar, href: "/assessment-question-bank/results" },
+  {
+    name: "Dashboard",
+    icon: faChartBar,
+    href: "/assessment-question-bank/dashboard",
+  },
+  {
+    name: "Question Bank",
+    icon: faBook,
+    href: "/assessment-question-bank/question-bank",
+  },
+  {
+    name: "Assessments",
+    icon: faTasks,
+    href: "/assessment-question-bank/assessments",
+  },
+  {
+    name: "Results",
+    icon: faChartBar,
+    href: "/assessment-question-bank/results",
+  },
 ];
 
 export default function Sidebar() {
@@ -28,7 +50,11 @@ export default function Sidebar() {
           className="flex items-center justify-center mb-8 cursor-pointer select-none"
           onClick={() => router.push("/classaScreen")}
         >
-          <img src="/assets/images/edueronLogo.png" alt="Edueron Logo" className="object-contain h-16 w-32" />
+          <img
+            src="/assets/images/edueronLogo.png"
+            alt="Edueron Logo"
+            className="object-contain h-16 w-32"
+          />
         </div>
         <nav className="flex flex-col gap-2">
           {navItems.map((item) => (
@@ -56,4 +82,4 @@ export default function Sidebar() {
       </button>
     </aside>
   );
-} 
+}
