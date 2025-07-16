@@ -143,7 +143,7 @@ export default function DiaryManagementPage() {
         let className = "Unknown Class";
         try {
           if (entry.classId) {
-            const classRef = typeof entry.classId === 'string' ? entry.classId : entry.classId.id;
+            const classRef = entry.classId;
             const classDoc = await getDoc(doc(db, "classes", classRef));
             if (classDoc.exists()) {
               className = classDoc.data().name;
@@ -157,7 +157,7 @@ export default function DiaryManagementPage() {
         let subjectName = "Unknown Subject";
         try {
           if (entry.subjectId) {
-            const subjectRef = typeof entry.subjectId === 'string' ? entry.subjectId : entry.subjectId.id;
+            const subjectRef = entry.subjectId;
             const subjectDoc = await getDoc(doc(db, "subjects", subjectRef));
             if (subjectDoc.exists()) {
               subjectName = subjectDoc.data().name;
@@ -171,7 +171,7 @@ export default function DiaryManagementPage() {
         let studentName = "";
         if (entry.type === "remark") {
           try {
-            const studentRef = typeof entry.studentId === 'string' ? entry.studentId : entry.studentId.id;
+            const studentRef = entry.studentId;
             const studentDoc = await getDoc(doc(db, "users", studentRef));
             if (studentDoc.exists()) {
               studentName = studentDoc.data().name || studentDoc.data().email;
