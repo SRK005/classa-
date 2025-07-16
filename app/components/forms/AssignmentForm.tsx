@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs } from "firebase/firestore";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db } from "../../../lib/firebaseClient";
 import { useAuth } from "../../contexts/AuthContext";
 import FormCard from "../shared/FormCard";
@@ -8,6 +9,8 @@ import Input from "../shared/Input";
 import Select from "../shared/Select";
 import Button from "../shared/Button";
 import LoadingSpinner from "../shared/LoadingSpinner";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faUpload, faFile, faTrash, faCheck } from "@fortawesome/free-solid-svg-icons";
 
 interface AssignmentFormProps {
   assignmentId?: string;
@@ -56,6 +59,9 @@ export default function AssignmentForm({ assignmentId, initialData, onSuccess, o
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (schoolId) {
@@ -187,6 +193,65 @@ export default function AssignmentForm({ assignmentId, initialData, onSuccess, o
     }
   };
 
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Check file size (limit to 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        setErrors({ file: "File size must be less than 10MB" });
+        return;
+      }
+      
+      // Check file type
+      const allowedTypes = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'text/plain',
+        'image/jpeg',
+        'image/png',
+        'image/gif'
+      ];
+      
+      if (!allowedTypes.includes(file.type)) {
+        setErrors({ file: "Please select a valid file (PDF, Word, Text, or Image)" });
+        return;
+      }
+      
+      setSelectedFile(file);
+      setErrors({ ...errors, file: "" });
+    }
+  };
+
+  const uploadFile = async (file: File): Promise<{ url: string; name: string }> => {
+    const storage = getStorage();
+    const fileRef = ref(storage, `assignments/${schoolId}/${Date.now()}_${file.name}`);
+    
+    setUploading(true);
+    setUploadProgress(0);
+    
+    try {
+      // Upload file
+      await uploadBytes(fileRef, file);
+      
+      // Get download URL
+      const downloadURL = await getDownloadURL(fileRef);
+      
+      setUploadProgress(100);
+      return { url: downloadURL, name: file.name };
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      throw new Error("Failed to upload file");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeFile = () => {
+    setSelectedFile(null);
+    setFormData(prev => ({ ...prev, attachmentUrl: "", attachmentName: "" }));
+  };
+
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
@@ -206,13 +271,7 @@ export default function AssignmentForm({ assignmentId, initialData, onSuccess, o
       newErrors.subjectId = "Subject is required";
     }
 
-    if (!formData.chapterId) {
-      newErrors.chapterId = "Chapter is required";
-    }
-
-    if (!formData.lessonId) {
-      newErrors.lessonId = "Lesson is required";
-    }
+    // Chapter and lesson are now optional - no validation needed
 
     if (!formData.startDate) {
       newErrors.startDate = "Start date is required";
@@ -244,15 +303,25 @@ export default function AssignmentForm({ assignmentId, initialData, onSuccess, o
 
     setLoading(true);
     try {
+      let attachmentUrl = formData.attachmentUrl;
+      let attachmentName = formData.attachmentName;
+
+      // Upload file if selected
+      if (selectedFile) {
+        const uploadResult = await uploadFile(selectedFile);
+        attachmentUrl = uploadResult.url;
+        attachmentName = uploadResult.name;
+      }
+
       const assignmentData = {
         topic: formData.topic.trim(),
         description: formData.description.trim(),
         classId: doc(db, "classes", formData.classId),
         subjectId: doc(db, "subjects", formData.subjectId),
-        chapterId: doc(db, "chapters", formData.chapterId),
-        lessonId: doc(db, "lessons", formData.lessonId),
-        attachmentUrl: formData.attachmentUrl.trim() || null,
-        attachmentName: formData.attachmentName.trim() || null,
+        chapterId: formData.chapterId ? doc(db, "chapters", formData.chapterId) : null,
+        lessonId: formData.lessonId ? doc(db, "lessons", formData.lessonId) : null,
+        attachmentUrl: attachmentUrl || null,
+        attachmentName: attachmentName || null,
         startDate: new Date(formData.startDate),
         endDate: new Date(formData.endDate),
         schoolId: doc(db, "school", schoolId!),
@@ -280,7 +349,7 @@ export default function AssignmentForm({ assignmentId, initialData, onSuccess, o
 
   return (
     <FormCard title={assignmentId ? "Edit Assignment" : "Create New Assignment"}>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-6">
         <Input
           label="Assignment Topic"
           type="text"
@@ -328,23 +397,21 @@ export default function AssignmentForm({ assignmentId, initialData, onSuccess, o
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Select
-            label="Chapter"
+            label="Chapter (Optional)"
             options={chapters}
             value={formData.chapterId}
             onChange={(value) => setFormData(prev => ({ ...prev, chapterId: value }))}
-            placeholder="Select a chapter"
-            required
+            placeholder="Select a chapter (optional)"
             disabled={!formData.subjectId}
             error={errors.chapterId}
           />
 
           <Select
-            label="Lesson"
+            label="Lesson (Optional)"
             options={lessons}
             value={formData.lessonId}
             onChange={(value) => setFormData(prev => ({ ...prev, lessonId: value }))}
-            placeholder="Select a lesson"
-            required
+            placeholder="Select a lesson (optional)"
             disabled={!formData.chapterId}
             error={errors.lessonId}
           />
@@ -370,27 +437,78 @@ export default function AssignmentForm({ assignmentId, initialData, onSuccess, o
           />
         </div>
 
-        <div className="border-t pt-4">
+        {/* File Upload Section */}
+        <div className="border-t pt-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Attachment (Optional)</h3>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="Attachment URL"
-              type="text"
-              value={formData.attachmentUrl}
-              onChange={(value) => setFormData(prev => ({ ...prev, attachmentUrl: value }))}
-              placeholder="Enter attachment URL"
-              error={errors.attachmentUrl}
-            />
+          <div className="space-y-4">
+            {/* File Upload */}
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+              {selectedFile ? (
+                <div className="flex items-center justify-center gap-3">
+                  <FontAwesomeIcon icon={faFile} className="text-blue-500 text-xl" />
+                  <div className="text-left">
+                    <p className="text-sm font-medium text-gray-900">{selectedFile.name}</p>
+                    <p className="text-xs text-gray-500">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={removeFile}
+                    className="text-red-500 hover:text-red-700 p-1"
+                  >
+                    <FontAwesomeIcon icon={faTrash} />
+                  </button>
+                </div>
+              ) : formData.attachmentUrl ? (
+                <div className="flex items-center justify-center gap-3">
+                  <FontAwesomeIcon icon={faFile} className="text-green-500 text-xl" />
+                  <div className="text-left">
+                    <p className="text-sm font-medium text-gray-900">{formData.attachmentName || "Existing File"}</p>
+                    <p className="text-xs text-gray-500">Currently uploaded</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={removeFile}
+                    className="text-red-500 hover:text-red-700 p-1"
+                  >
+                    <FontAwesomeIcon icon={faTrash} />
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <FontAwesomeIcon icon={faUpload} className="text-gray-400 text-3xl mb-2" />
+                  <p className="text-gray-600 mb-2">Click to upload or drag and drop</p>
+                  <p className="text-xs text-gray-500">PDF, Word, Text, or Image files (max 10MB)</p>
+                </div>
+              )}
+              
+              <input
+                type="file"
+                onChange={handleFileSelect}
+                accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
+            </div>
 
-            <Input
-              label="Attachment Name"
-              type="text"
-              value={formData.attachmentName}
-              onChange={(value) => setFormData(prev => ({ ...prev, attachmentName: value }))}
-              placeholder="Enter attachment name"
-              error={errors.attachmentName}
-            />
+            {/* Upload Progress */}
+            {uploading && (
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-blue-900">Uploading...</span>
+                  <span className="text-sm text-blue-700">{uploadProgress}%</span>
+                </div>
+                <div className="w-full bg-blue-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${uploadProgress}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
+
+            {errors.file && (
+              <div className="text-red-600 text-sm">{errors.file}</div>
+            )}
           </div>
         </div>
 
@@ -398,14 +516,14 @@ export default function AssignmentForm({ assignmentId, initialData, onSuccess, o
           <div className="text-red-600 text-sm">{errors.submit}</div>
         )}
 
-        <div className="flex gap-4 pt-4">
+        <div className="flex gap-4 pt-6">
           <Button
             type="submit"
-            loading={loading}
-            disabled={loading || loadingData}
+            loading={loading || uploading}
+            disabled={loading || loadingData || uploading}
             className="flex-1"
           >
-            {loading ? <LoadingSpinner size="small" /> : null}
+            {loading || uploading ? <LoadingSpinner size="small" /> : null}
             {assignmentId ? "Update Assignment" : "Create Assignment"}
           </Button>
           
@@ -414,7 +532,7 @@ export default function AssignmentForm({ assignmentId, initialData, onSuccess, o
               type="button"
               variant="secondary"
               onClick={onCancel}
-              disabled={loading}
+              disabled={loading || uploading}
               className="flex-1"
             >
               Cancel
