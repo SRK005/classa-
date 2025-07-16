@@ -11,30 +11,82 @@ import {
   faPlus,
   faEdit,
   faTrash,
-  faBook,
+  faBookOpen,
   faExclamationTriangle,
   faCalendarAlt,
   faUser,
   faGraduationCap,
+  faComments,
+  faClipboard,
+  faSearch,
+  faFileAlt,
+  faUserCheck,
+  faCalendarCheck,
+  faChartLine,
+  faBook,
+  faUsers
 } from "@fortawesome/free-solid-svg-icons";
 
-interface DiaryEntry {
+interface HomeworkEntry {
   id: string;
+  type: "homework";
   title: string;
-  content: string;
-  date: any;
+  description: string;
+  workToDo: string;
+  dueDate: any;
+  priority: string;
+  metadata: {
+    estimatedTime?: string;
+    difficulty?: string;
+  };
   classId: string;
   subjectId: string;
-  studentId: string;
+  attachments?: any[];
   createdAt: any;
   updatedAt?: any;
 }
 
-interface DiaryEntryWithDetails extends DiaryEntry {
+interface RemarkEntry {
+  id: string;
+  type: "remark";
+  studentId: string;
+  personalRemarks: string;
+  workRemarks?: string;
+  parentRemarks?: string;
+  priority: string;
+  category: string;
+  tags: string[];
+  visibleToParents: boolean;
+  visibleToStudent: boolean;
+  followUpRequired: boolean;
+  followUpDate?: any;
+  classId: string;
+  subjectId: string;
+  attachments?: any[];
+  createdAt: any;
+  updatedAt?: any;
+}
+
+type DiaryEntry = HomeworkEntry | RemarkEntry;
+
+type DiaryEntryWithDetails = DiaryEntry & {
   className: string;
   subjectName: string;
-  studentName: string;
-}
+  studentName?: string;
+};
+
+const PRIORITY_COLORS = {
+  high: { color: "#ef4444", bgColor: "#fef2f2" },
+  medium: { color: "#f59e0b", bgColor: "#fffbeb" },
+  low: { color: "#10b981", bgColor: "#f0fdf4" }
+};
+
+const CATEGORY_ICONS = {
+  academic: faGraduationCap,
+  behavior: faUserCheck,
+  attendance: faCalendarCheck,
+  performance: faChartLine
+};
 
 export default function DiaryManagementPage() {
   const { schoolId, loading: authLoading } = useAuth();
@@ -43,6 +95,9 @@ export default function DiaryManagementPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingEntry, setEditingEntry] = useState<DiaryEntry | null>(null);
   const [error, setError] = useState<string>("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState<"all" | "homework" | "remark">("all");
+  const [filterPriority, setFilterPriority] = useState<"all" | "high" | "medium" | "low">("all");
 
   useEffect(() => {
     if (!authLoading) {
@@ -62,31 +117,34 @@ export default function DiaryManagementPage() {
     setError("");
     
     try {
-      const diaryQuery = query(
-        collection(db, "diary"),
+      // Fetch homework entries
+      const homeworkQuery = query(
+        collection(db, "homeworks"),
         where("schoolId", "==", doc(db, "school", schoolId))
       );
-      const diarySnapshot = await getDocs(diaryQuery);
+      const homeworkSnapshot = await getDocs(homeworkQuery);
       
-      const entryPromises = diarySnapshot.docs.map(async (entryDoc) => {
-        const entryData = entryDoc.data();
-        const entry: DiaryEntry = {
-          id: entryDoc.id,
-          title: entryData.title || "",
-          content: entryData.content || "",
-          date: entryData.date,
-          classId: entryData.classId?.id || entryData.classId || "",
-          subjectId: entryData.subjectId?.id || entryData.subjectId || "",
-          studentId: entryData.studentId?.id || entryData.studentId || "",
-          createdAt: entryData.createdAt,
-          updatedAt: entryData.updatedAt,
-        };
+      // Fetch remark entries
+      const remarkQuery = query(
+        collection(db, "remarks"),
+        where("schoolId", "==", doc(db, "school", schoolId))
+      );
+      const remarkSnapshot = await getDocs(remarkQuery);
+
+      const allEntries = [
+        ...homeworkSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), type: "homework" as const })),
+        ...remarkSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), type: "remark" as const }))
+      ];
+
+      const entryPromises = allEntries.map(async (entryData: any) => {
+        const entry = entryData as DiaryEntry;
 
         // Fetch class name
         let className = "Unknown Class";
         try {
           if (entry.classId) {
-            const classDoc = await getDoc(doc(db, "classes", entry.classId));
+            const classRef = typeof entry.classId === 'string' ? entry.classId : entry.classId.id;
+            const classDoc = await getDoc(doc(db, "classes", classRef));
             if (classDoc.exists()) {
               className = classDoc.data().name;
             }
@@ -99,7 +157,8 @@ export default function DiaryManagementPage() {
         let subjectName = "Unknown Subject";
         try {
           if (entry.subjectId) {
-            const subjectDoc = await getDoc(doc(db, "subjects", entry.subjectId));
+            const subjectRef = typeof entry.subjectId === 'string' ? entry.subjectId : entry.subjectId.id;
+            const subjectDoc = await getDoc(doc(db, "subjects", subjectRef));
             if (subjectDoc.exists()) {
               subjectName = subjectDoc.data().name;
             }
@@ -108,17 +167,18 @@ export default function DiaryManagementPage() {
           console.error("Error fetching subject name:", error);
         }
 
-        // Fetch student name
-        let studentName = "Unknown Student";
-        try {
-          if (entry.studentId) {
-            const studentDoc = await getDoc(doc(db, "students", entry.studentId));
+        // Fetch student name for remarks
+        let studentName = "";
+        if (entry.type === "remark") {
+          try {
+            const studentRef = typeof entry.studentId === 'string' ? entry.studentId : entry.studentId.id;
+            const studentDoc = await getDoc(doc(db, "users", studentRef));
             if (studentDoc.exists()) {
-              studentName = studentDoc.data().name;
+              studentName = studentDoc.data().name || studentDoc.data().email;
             }
+          } catch (error) {
+            console.error("Error fetching student name:", error);
           }
-        } catch (error) {
-          console.error("Error fetching student name:", error);
         }
 
         return {
@@ -130,13 +190,14 @@ export default function DiaryManagementPage() {
       });
 
       const entriesWithDetails = await Promise.all(entryPromises);
-      // Sort by date (newest first)
+      
+      // Sort by created date (newest first)
       entriesWithDetails.sort((a, b) => {
-        if (a.date && b.date) {
-          return b.date.toDate().getTime() - a.date.toDate().getTime();
-        }
-        return 0;
+        const dateA = a.createdAt?.toDate?.() || new Date(0);
+        const dateB = b.createdAt?.toDate?.() || new Date(0);
+        return dateB.getTime() - dateA.getTime();
       });
+      
       setDiaryEntries(entriesWithDetails);
     } catch (error) {
       console.error("Error fetching diary entries:", error);
@@ -146,17 +207,18 @@ export default function DiaryManagementPage() {
     }
   };
 
-  const handleDeleteEntry = async (entryId: string) => {
-    if (!window.confirm("Are you sure you want to delete this diary entry?")) {
+  const handleDeleteEntry = async (entryId: string, entryType: string) => {
+    if (!window.confirm("Are you sure you want to delete this entry?")) {
       return;
     }
 
     try {
-      await deleteDoc(doc(db, "diary", entryId));
+      const collectionName = entryType === "homework" ? "homeworks" : "remarks";
+      await deleteDoc(doc(db, collectionName, entryId));
       setDiaryEntries(diaryEntries.filter(entry => entry.id !== entryId));
     } catch (error) {
-      console.error("Error deleting diary entry:", error);
-      setError("Failed to delete diary entry");
+      console.error("Error deleting entry:", error);
+      setError("Failed to delete entry");
     }
   };
 
@@ -175,6 +237,48 @@ export default function DiaryManagementPage() {
     setShowForm(false);
     setEditingEntry(null);
   };
+
+  const formatDate = (date: any) => {
+    if (!date) return "N/A";
+    return date.toDate ? date.toDate().toLocaleDateString() : "N/A";
+  };
+
+  const getPriorityColor = (priority: string) => {
+    return PRIORITY_COLORS[priority as keyof typeof PRIORITY_COLORS] || PRIORITY_COLORS.medium;
+  };
+
+  const filteredEntries = diaryEntries.filter(entry => {
+    const matchesSearch = (
+      (entry.type === "homework" && (
+        entry.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        entry.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        entry.workToDo.toLowerCase().includes(searchTerm.toLowerCase())
+      )) ||
+      (entry.type === "remark" && (
+        entry.personalRemarks.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (entry.workRemarks && entry.workRemarks.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (entry.parentRemarks && entry.parentRemarks.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (entry.studentName && entry.studentName.toLowerCase().includes(searchTerm.toLowerCase()))
+      ))
+    ) || entry.className.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      entry.subjectName.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesType = filterType === "all" || entry.type === filterType;
+    const matchesPriority = filterPriority === "all" || entry.priority === filterPriority;
+
+    return matchesSearch && matchesType && matchesPriority;
+  });
+
+  const getStats = () => {
+    const total = diaryEntries.length;
+    const homework = diaryEntries.filter(entry => entry.type === "homework").length;
+    const remarks = diaryEntries.filter(entry => entry.type === "remark").length;
+    const highPriority = diaryEntries.filter(entry => entry.priority === "high").length;
+    
+    return { total, homework, remarks, highPriority };
+  };
+
+  const stats = getStats();
 
   // Show loading while auth is loading
   if (authLoading) {
@@ -220,22 +324,111 @@ export default function DiaryManagementPage() {
       
       <main className="flex-1 p-8">
         <div className="max-w-7xl mx-auto">
+          {/* Header */}
           <div className="flex justify-between items-center mb-8">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Diary Management</h1>
-              <p className="text-gray-600">Manage student diary entries and daily activities</p>
+              <p className="text-gray-600">Manage homework assignments and student remarks</p>
             </div>
             <button
               onClick={() => setShowForm(true)}
-              className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium flex items-center gap-2 transition-colors"
+              className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white px-6 py-3 rounded-xl font-medium flex items-center gap-2 transition-all duration-200 shadow-lg hover:shadow-xl"
             >
               <FontAwesomeIcon icon={faPlus} />
-              Add Diary Entry
+              Add Entry
             </button>
           </div>
 
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Total Entries</p>
+                  <p className="text-3xl font-bold text-gray-900">{stats.total}</p>
+                </div>
+                <div className="bg-blue-100 p-3 rounded-lg">
+                  <FontAwesomeIcon icon={faClipboard} className="text-blue-600 text-xl" />
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Homework</p>
+                  <p className="text-3xl font-bold text-green-600">{stats.homework}</p>
+                </div>
+                <div className="bg-green-100 p-3 rounded-lg">
+                  <FontAwesomeIcon icon={faBookOpen} className="text-green-600 text-xl" />
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Remarks</p>
+                  <p className="text-3xl font-bold text-purple-600">{stats.remarks}</p>
+                </div>
+                <div className="bg-purple-100 p-3 rounded-lg">
+                  <FontAwesomeIcon icon={faComments} className="text-purple-600 text-xl" />
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">High Priority</p>
+                  <p className="text-3xl font-bold text-red-600">{stats.highPriority}</p>
+                </div>
+                <div className="bg-red-100 p-3 rounded-lg">
+                  <FontAwesomeIcon icon={faExclamationTriangle} className="text-red-600 text-xl" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Search and Filter */}
+          <div className="mb-6 bg-white rounded-xl shadow-sm p-6">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 relative">
+                <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search entries..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+              <div className="flex gap-4">
+                <select
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value as any)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                >
+                  <option value="all">All Types</option>
+                  <option value="homework">Homework</option>
+                  <option value="remark">Remarks</option>
+                </select>
+                <select
+                  value={filterPriority}
+                  onChange={(e) => setFilterPriority(e.target.value as any)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                >
+                  <option value="all">All Priorities</option>
+                  <option value="high">High Priority</option>
+                  <option value="medium">Medium Priority</option>
+                  <option value="low">Low Priority</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-6">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-xl mb-6">
               <div className="flex items-center gap-2">
                 <FontAwesomeIcon icon={faExclamationTriangle} />
                 <span>{error}</span>
@@ -257,130 +450,175 @@ export default function DiaryManagementPage() {
               </div>
             </div>
           ) : (
-            <div className="bg-white rounded-lg shadow-md overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Title
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Student
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Class
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Subject
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Date
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Content
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {diaryEntries.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
-                          <div className="flex flex-col items-center">
-                            <FontAwesomeIcon icon={faBook} className="text-4xl text-gray-300 mb-4" />
-                            <p className="text-lg font-medium mb-2">No diary entries found</p>
-                            <p className="text-sm">Create your first diary entry to get started</p>
+            <>
+              {/* Entries Grid */}
+              {filteredEntries.length === 0 ? (
+                <div className="text-center py-12">
+                  <FontAwesomeIcon icon={faClipboard} className="text-gray-400 text-6xl mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-600 mb-2">No entries found</h3>
+                  <p className="text-gray-500 mb-6">
+                    {searchTerm || filterType !== "all" || filterPriority !== "all"
+                      ? "Try adjusting your search or filter criteria"
+                      : "Create your first diary entry to get started"}
+                  </p>
+                  <button
+                    onClick={() => setShowForm(true)}
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium flex items-center gap-2 mx-auto transition-colors"
+                  >
+                    <FontAwesomeIcon icon={faPlus} />
+                    Add Entry
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredEntries.map((entry) => (
+                    <div key={entry.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden">
+                      {/* Entry Header */}
+                      <div className={`p-4 border-b`} style={{ backgroundColor: getPriorityColor(entry.priority).bgColor }}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
+                              <FontAwesomeIcon 
+                                icon={entry.type === "homework" ? faBookOpen : faComments}
+                                className="text-lg"
+                                style={{ color: getPriorityColor(entry.priority).color }}
+                              />
+                            </div>
+                            <div>
+                              <h3 className="font-semibold text-gray-900">
+                                {entry.type === "homework" ? "Homework" : "Remark"}
+                              </h3>
+                              <p className="text-sm text-gray-600 flex items-center gap-1">
+                                <span
+                                  className="w-2 h-2 rounded-full"
+                                  style={{ backgroundColor: getPriorityColor(entry.priority).color }}
+                                ></span>
+                                {entry.priority.charAt(0).toUpperCase() + entry.priority.slice(1)} Priority
+                              </p>
+                            </div>
                           </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      diaryEntries.map((entry) => (
-                        <tr key={entry.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">
-                              {entry.title}
+                          <div className="text-xs text-gray-500">
+                            {formatDate(entry.createdAt)}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="p-4">
+                        {/* Content */}
+                        <div className="mb-4">
+                          {entry.type === "homework" ? (
+                            <div>
+                              <h4 className="font-medium text-gray-900 mb-2 line-clamp-1">
+                                {entry.title}
+                              </h4>
+                              <p className="text-sm text-gray-600 line-clamp-2 mb-2">
+                                {entry.description}
+                              </p>
+                              <div className="text-xs text-gray-500 mb-2">
+                                <span className="font-medium">Due:</span> {formatDate(entry.dueDate)}
+                              </div>
+                              {entry.metadata?.estimatedTime && (
+                                <div className="text-xs text-gray-500">
+                                  <span className="font-medium">Time:</span> {entry.metadata.estimatedTime}
+                                </div>
+                              )}
                             </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <FontAwesomeIcon icon={faUser} className="text-gray-400" />
-                              <span className="text-sm text-gray-900">{entry.studentName}</span>
+                          ) : (
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <FontAwesomeIcon 
+                                  icon={CATEGORY_ICONS[entry.category as keyof typeof CATEGORY_ICONS]} 
+                                  className="text-sm text-gray-600"
+                                />
+                                <span className="text-sm font-medium text-gray-600">
+                                  {entry.category.charAt(0).toUpperCase() + entry.category.slice(1)}
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-900 line-clamp-2 mb-2">
+                                {entry.personalRemarks}
+                              </p>
+                              {entry.studentName && (
+                                <div className="text-xs text-gray-500 mb-2">
+                                  <span className="font-medium">Student:</span> {entry.studentName}
+                                </div>
+                              )}
+                              {entry.tags.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mb-2">
+                                  {entry.tags.slice(0, 3).map((tag: string, index: number) => (
+                                    <span key={index} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                                      {tag}
+                                    </span>
+                                  ))}
+                                  {entry.tags.length > 3 && (
+                                    <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-full">
+                                      +{entry.tags.length - 3} more
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <FontAwesomeIcon icon={faGraduationCap} className="text-gray-400" />
-                              <span className="text-sm text-gray-900">{entry.className}</span>
+                          )}
+                        </div>
+
+                        {/* Details */}
+                        <div className="space-y-2 mb-4">
+                          <div className="flex items-center gap-2">
+                            <FontAwesomeIcon icon={faUsers} className="text-gray-400 text-sm" />
+                            <span className="text-sm text-gray-600">{entry.className}</span>
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            <FontAwesomeIcon icon={faBook} className="text-gray-400 text-sm" />
+                            <span className="text-sm text-gray-600">{entry.subjectName}</span>
+                          </div>
+                        </div>
+
+                        {/* Attachments */}
+                        {entry.attachments && entry.attachments.length > 0 && (
+                          <div className="mb-4">
+                            <div className="flex items-center gap-2 text-sm text-blue-600">
+                              <FontAwesomeIcon icon={faFileAlt} />
+                              <span>{entry.attachments.length} attachment(s)</span>
                             </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">
-                              {entry.subjectName}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <FontAwesomeIcon icon={faCalendarAlt} className="text-gray-400" />
-                              <span className="text-sm text-gray-900">
-                                {entry.date?.toDate?.()?.toLocaleDateString() || "N/A"}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900 max-w-xs truncate">
-                              {entry.content || "No content"}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => handleEditEntry(entry)}
-                                className="text-indigo-600 hover:text-indigo-900 p-2 rounded-full hover:bg-indigo-50 transition-colors"
-                                title="Edit diary entry"
-                              >
-                                <FontAwesomeIcon icon={faEdit} />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteEntry(entry.id)}
-                                className="text-red-600 hover:text-red-900 p-2 rounded-full hover:bg-red-50 transition-colors"
-                                title="Delete diary entry"
-                              >
-                                <FontAwesomeIcon icon={faTrash} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                          </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-2 pt-4 border-t">
+                          <button
+                            onClick={() => handleEditEntry(entry)}
+                            className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                          >
+                            <FontAwesomeIcon icon={faEdit} />
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteEntry(entry.id, entry.type)}
+                            className="flex-1 bg-red-50 hover:bg-red-100 text-red-600 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                          >
+                            <FontAwesomeIcon icon={faTrash} />
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       </main>
 
       {showForm && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
-            <div className="p-6">
-              <DiaryForm
-                entryId={editingEntry?.id}
-                initialData={editingEntry ? {
-                  title: editingEntry.title,
-                  content: editingEntry.content,
-                  date: editingEntry.date,
-                  classId: editingEntry.classId,
-                  subjectId: editingEntry.subjectId,
-                  studentId: editingEntry.studentId,
-                } : undefined}
-                onSuccess={handleFormSuccess}
-                onCancel={handleFormCancel}
-              />
-            </div>
+          <div className="bg-white rounded-xl max-w-5xl w-full max-h-[95vh] overflow-hidden shadow-xl">
+            <DiaryForm
+              entryId={editingEntry?.id}
+              initialData={editingEntry}
+              onSuccess={handleFormSuccess}
+              onCancel={handleFormCancel}
+            />
           </div>
         </div>
       )}

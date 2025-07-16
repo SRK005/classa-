@@ -10,7 +10,23 @@ import Select from "../shared/Select";
 import Button from "../shared/Button";
 import LoadingSpinner from "../shared/LoadingSpinner";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faUpload, faFile, faTrash, faCheck } from "@fortawesome/free-solid-svg-icons";
+import { 
+  faUpload, 
+  faFile, 
+  faTrash, 
+  faCheck, 
+  faTimes, 
+  faClipboardList, 
+  faCalendarAlt, 
+  faUsers, 
+  faBook, 
+  faBookmark, 
+  faGraduationCap,
+  faFileAlt,
+  faCloudUpload,
+  faSpinner,
+  faExclamationTriangle
+} from "@fortawesome/free-solid-svg-icons";
 
 interface AssignmentFormProps {
   assignmentId?: string;
@@ -271,8 +287,6 @@ export default function AssignmentForm({ assignmentId, initialData, onSuccess, o
       newErrors.subjectId = "Subject is required";
     }
 
-    // Chapter and lesson are now optional - no validation needed
-
     if (!formData.startDate) {
       newErrors.startDate = "Start date is required";
     }
@@ -348,198 +362,316 @@ export default function AssignmentForm({ assignmentId, initialData, onSuccess, o
   };
 
   return (
-    <FormCard title={assignmentId ? "Edit Assignment" : "Create New Assignment"}>
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <Input
-          label="Assignment Topic"
-          type="text"
-          value={formData.topic}
-          onChange={(value) => setFormData(prev => ({ ...prev, topic: value }))}
-          placeholder="Enter assignment topic"
-          required
-          error={errors.topic}
-        />
-
-        <Input
-          label="Description"
-          type="textarea"
-          value={formData.description}
-          onChange={(value) => setFormData(prev => ({ ...prev, description: value }))}
-          placeholder="Enter assignment description"
-          rows={4}
-          required
-          error={errors.description}
-        />
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Select
-            label="Class"
-            options={classes}
-            value={formData.classId}
-            onChange={(value) => setFormData(prev => ({ ...prev, classId: value }))}
-            placeholder="Select a class"
-            required
-            disabled={loadingData}
-            error={errors.classId}
-          />
-
-          <Select
-            label="Subject"
-            options={subjects}
-            value={formData.subjectId}
-            onChange={(value) => setFormData(prev => ({ ...prev, subjectId: value }))}
-            placeholder="Select a subject"
-            required
-            disabled={!formData.classId}
-            error={errors.subjectId}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Select
-            label="Chapter (Optional)"
-            options={chapters}
-            value={formData.chapterId}
-            onChange={(value) => setFormData(prev => ({ ...prev, chapterId: value }))}
-            placeholder="Select a chapter (optional)"
-            disabled={!formData.subjectId}
-            error={errors.chapterId}
-          />
-
-          <Select
-            label="Lesson (Optional)"
-            options={lessons}
-            value={formData.lessonId}
-            onChange={(value) => setFormData(prev => ({ ...prev, lessonId: value }))}
-            placeholder="Select a lesson (optional)"
-            disabled={!formData.chapterId}
-            error={errors.lessonId}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input
-            label="Start Date"
-            type="date"
-            value={formData.startDate}
-            onChange={(value) => setFormData(prev => ({ ...prev, startDate: value }))}
-            required
-            error={errors.startDate}
-          />
-
-          <Input
-            label="End Date"
-            type="date"
-            value={formData.endDate}
-            onChange={(value) => setFormData(prev => ({ ...prev, endDate: value }))}
-            required
-            error={errors.endDate}
-          />
-        </div>
-
-        {/* File Upload Section */}
-        <div className="border-t pt-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Attachment (Optional)</h3>
-          
-          <div className="space-y-4">
-            {/* File Upload */}
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-              {selectedFile ? (
-                <div className="flex items-center justify-center gap-3">
-                  <FontAwesomeIcon icon={faFile} className="text-blue-500 text-xl" />
-                  <div className="text-left">
-                    <p className="text-sm font-medium text-gray-900">{selectedFile.name}</p>
-                    <p className="text-xs text-gray-500">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={removeFile}
-                    className="text-red-500 hover:text-red-700 p-1"
-                  >
-                    <FontAwesomeIcon icon={faTrash} />
-                  </button>
-                </div>
-              ) : formData.attachmentUrl ? (
-                <div className="flex items-center justify-center gap-3">
-                  <FontAwesomeIcon icon={faFile} className="text-green-500 text-xl" />
-                  <div className="text-left">
-                    <p className="text-sm font-medium text-gray-900">{formData.attachmentName || "Existing File"}</p>
-                    <p className="text-xs text-gray-500">Currently uploaded</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={removeFile}
-                    className="text-red-500 hover:text-red-700 p-1"
-                  >
-                    <FontAwesomeIcon icon={faTrash} />
-                  </button>
-                </div>
-              ) : (
-                <div>
-                  <FontAwesomeIcon icon={faUpload} className="text-gray-400 text-3xl mb-2" />
-                  <p className="text-gray-600 mb-2">Click to upload or drag and drop</p>
-                  <p className="text-xs text-gray-500">PDF, Word, Text, or Image files (max 10MB)</p>
-                </div>
-              )}
-              
-              <input
-                type="file"
-                onChange={handleFileSelect}
-                accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif"
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              />
+    <div className="h-full overflow-hidden">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-t-xl">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+              <FontAwesomeIcon icon={faClipboardList} className="text-xl" />
             </div>
-
-            {/* Upload Progress */}
-            {uploading && (
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-blue-900">Uploading...</span>
-                  <span className="text-sm text-blue-700">{uploadProgress}%</span>
-                </div>
-                <div className="w-full bg-blue-200 rounded-full h-2">
-                  <div 
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${uploadProgress}%` }}
-                  ></div>
-                </div>
-              </div>
-            )}
-
-            {errors.file && (
-              <div className="text-red-600 text-sm">{errors.file}</div>
-            )}
+            <div>
+              <h2 className="text-2xl font-bold">
+                {assignmentId ? "Edit Assignment" : "Create New Assignment"}
+              </h2>
+              <p className="text-blue-100 text-sm">
+                {assignmentId ? "Update assignment details" : "Fill in the details to create an assignment"}
+              </p>
+            </div>
           </div>
-        </div>
-
-        {errors.submit && (
-          <div className="text-red-600 text-sm">{errors.submit}</div>
-        )}
-
-        <div className="flex gap-4 pt-6">
-          <Button
-            type="submit"
-            loading={loading || uploading}
-            disabled={loading || loadingData || uploading}
-            className="flex-1"
-          >
-            {loading || uploading ? <LoadingSpinner size="small" /> : null}
-            {assignmentId ? "Update Assignment" : "Create Assignment"}
-          </Button>
-          
           {onCancel && (
-            <Button
-              type="button"
-              variant="secondary"
+            <button
               onClick={onCancel}
-              disabled={loading || uploading}
-              className="flex-1"
+              className="text-white/80 hover:text-white hover:bg-white/10 p-2 rounded-lg transition-all duration-200"
             >
-              Cancel
-            </Button>
+              <FontAwesomeIcon icon={faTimes} className="text-lg" />
+            </button>
           )}
         </div>
-      </form>
-    </FormCard>
+      </div>
+
+      {/* Scrollable Content */}
+      <div className="h-[calc(100vh-140px)] overflow-y-auto custom-scrollbar">
+        <div className="p-6">
+          <form onSubmit={handleSubmit} className="space-y-8">
+            {/* Assignment Details Section */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <FontAwesomeIcon icon={faClipboardList} className="text-blue-600 text-sm" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">Assignment Details</h3>
+              </div>
+              
+              <div className="space-y-6">
+                <Input
+                  label="Assignment Topic"
+                  type="text"
+                  value={formData.topic}
+                  onChange={(value) => setFormData(prev => ({ ...prev, topic: value }))}
+                  placeholder="e.g., Mathematics Problem Set 1"
+                  required
+                  error={errors.topic}
+                />
+
+                <Input
+                  label="Description"
+                  type="textarea"
+                  value={formData.description}
+                  onChange={(value) => setFormData(prev => ({ ...prev, description: value }))}
+                  placeholder="Provide detailed instructions for the assignment..."
+                  rows={4}
+                  required
+                  error={errors.description}
+                />
+              </div>
+            </div>
+
+            {/* Class & Subject Section */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                  <FontAwesomeIcon icon={faUsers} className="text-green-600 text-sm" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">Class & Subject</h3>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Select
+                  label="Class"
+                  options={classes}
+                  value={formData.classId}
+                  onChange={(value) => setFormData(prev => ({ ...prev, classId: value }))}
+                  placeholder="Select a class"
+                  required
+                  disabled={loadingData}
+                  error={errors.classId}
+                />
+
+                <Select
+                  label="Subject"
+                  options={subjects}
+                  value={formData.subjectId}
+                  onChange={(value) => setFormData(prev => ({ ...prev, subjectId: value }))}
+                  placeholder="Select a subject"
+                  required
+                  disabled={!formData.classId}
+                  error={errors.subjectId}
+                />
+              </div>
+            </div>
+
+            {/* Chapter & Lesson Section */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <FontAwesomeIcon icon={faBook} className="text-purple-600 text-sm" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">Chapter & Lesson</h3>
+                <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-full">Optional</span>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Select
+                  label="Chapter"
+                  options={chapters}
+                  value={formData.chapterId}
+                  onChange={(value) => setFormData(prev => ({ ...prev, chapterId: value }))}
+                  placeholder="Select a chapter (optional)"
+                  disabled={!formData.subjectId}
+                  error={errors.chapterId}
+                />
+
+                <Select
+                  label="Lesson"
+                  options={lessons}
+                  value={formData.lessonId}
+                  onChange={(value) => setFormData(prev => ({ ...prev, lessonId: value }))}
+                  placeholder="Select a lesson (optional)"
+                  disabled={!formData.chapterId}
+                  error={errors.lessonId}
+                />
+              </div>
+            </div>
+
+            {/* Schedule Section */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+                  <FontAwesomeIcon icon={faCalendarAlt} className="text-orange-600 text-sm" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">Schedule</h3>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Input
+                  label="Start Date"
+                  type="date"
+                  value={formData.startDate}
+                  onChange={(value) => setFormData(prev => ({ ...prev, startDate: value }))}
+                  required
+                  error={errors.startDate}
+                />
+
+                <Input
+                  label="End Date"
+                  type="date"
+                  value={formData.endDate}
+                  onChange={(value) => setFormData(prev => ({ ...prev, endDate: value }))}
+                  required
+                  error={errors.endDate}
+                />
+              </div>
+            </div>
+
+            {/* File Upload Section */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+                  <FontAwesomeIcon icon={faFileAlt} className="text-indigo-600 text-sm" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">Attachment</h3>
+                <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-full">Optional</span>
+              </div>
+              
+              <div className="space-y-4">
+                {/* File Upload Area */}
+                <div className="relative">
+                  <input
+                    type="file"
+                    onChange={handleFileSelect}
+                    accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                  />
+                  
+                  <div className={`border-2 border-dashed rounded-xl p-8 text-center transition-all duration-200 ${
+                    selectedFile || formData.attachmentUrl 
+                      ? "border-green-300 bg-green-50" 
+                      : "border-gray-300 bg-gray-50 hover:border-blue-400 hover:bg-blue-50"
+                  }`}>
+                    {selectedFile ? (
+                      <div className="flex items-center justify-center gap-4">
+                        <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                          <FontAwesomeIcon icon={faFile} className="text-green-600 text-xl" />
+                        </div>
+                        <div className="text-left">
+                          <p className="text-sm font-medium text-gray-900">{selectedFile.name}</p>
+                          <p className="text-xs text-gray-500">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeFile();
+                          }}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-all duration-200"
+                        >
+                          <FontAwesomeIcon icon={faTrash} />
+                        </button>
+                      </div>
+                    ) : formData.attachmentUrl ? (
+                      <div className="flex items-center justify-center gap-4">
+                        <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                          <FontAwesomeIcon icon={faFile} className="text-blue-600 text-xl" />
+                        </div>
+                        <div className="text-left">
+                          <p className="text-sm font-medium text-gray-900">{formData.attachmentName || "Existing File"}</p>
+                          <p className="text-xs text-gray-500">Currently uploaded</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeFile();
+                          }}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-all duration-200"
+                        >
+                          <FontAwesomeIcon icon={faTrash} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="w-16 h-16 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+                          <FontAwesomeIcon icon={faCloudUpload} className="text-blue-600 text-2xl" />
+                        </div>
+                        <p className="text-gray-700 font-medium mb-2">Click to upload or drag and drop</p>
+                        <p className="text-sm text-gray-500">PDF, Word, Text, or Image files (max 10MB)</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Upload Progress */}
+                {uploading && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <FontAwesomeIcon icon={faSpinner} className="text-blue-600 animate-spin" />
+                        <span className="text-sm font-medium text-blue-900">Uploading...</span>
+                      </div>
+                      <span className="text-sm text-blue-700 font-medium">{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full bg-blue-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                )}
+
+                {errors.file && (
+                  <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 p-3 rounded-lg">
+                    <FontAwesomeIcon icon={faExclamationTriangle} />
+                    <span>{errors.file}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Submit Error */}
+            {errors.submit && (
+              <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 p-4 rounded-xl border border-red-200">
+                <FontAwesomeIcon icon={faExclamationTriangle} />
+                <span>{errors.submit}</span>
+              </div>
+            )}
+          </form>
+        </div>
+      </div>
+
+      {/* Fixed Footer */}
+      <div className="bg-gray-50 border-t border-gray-200 p-6 rounded-b-xl">
+        <div className="flex gap-4">
+          <button
+            type="submit"
+            onClick={handleSubmit}
+            disabled={loading || loadingData || uploading}
+            className={`flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed ${
+              loading || uploading ? "animate-pulse" : ""
+            }`}
+          >
+            {loading || uploading ? (
+              <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
+            ) : (
+              <FontAwesomeIcon icon={faCheck} />
+            )}
+            {loading || uploading ? "Processing..." : (assignmentId ? "Update Assignment" : "Create Assignment")}
+          </button>
+          
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={loading || uploading}
+              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <FontAwesomeIcon icon={faTimes} />
+              Cancel
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 } 

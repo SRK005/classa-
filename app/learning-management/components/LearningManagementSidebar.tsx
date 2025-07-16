@@ -15,7 +15,6 @@ import {
   faArrowLeft,
   faChevronDown,
   faChevronRight,
-  faLayerGroup,
   faGraduationCap,
   faList,
   faPlus,
@@ -106,22 +105,22 @@ export default function LearningManagementSidebar() {
   };
 
   return (
-    <aside className="h-screen w-72 bg-gradient-to-b from-slate-900 to-slate-800 shadow-xl flex flex-col overflow-hidden">
+    <aside className="h-screen w-72 bg-white border-r border-gray-200 shadow-sm flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="p-6 border-b border-slate-700">
+      <div className="p-6 border-b border-gray-200">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-[#007dc6] rounded-lg flex items-center justify-center">
               <FontAwesomeIcon icon={faGraduationCap} className="text-white text-lg" />
             </div>
             <div>
-              <h2 className="text-white font-bold text-lg">Learning</h2>
-              <p className="text-slate-400 text-sm">Management</p>
+              <h2 className="text-gray-900 font-bold text-lg">Learning</h2>
+              <p className="text-gray-600 text-sm">Management</p>
             </div>
           </div>
           <button
             onClick={() => router.push("/classaScreen")}
-            className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-all duration-200"
+            className="p-2 text-gray-500 hover:text-[#007dc6] hover:bg-blue-50 rounded-lg transition-all duration-200"
             title="Back to Main"
           >
             <FontAwesomeIcon icon={faArrowLeft} />
@@ -137,8 +136,8 @@ export default function LearningManagementSidebar() {
               <div
                 className={`flex items-center justify-between p-3 rounded-xl transition-all duration-200 cursor-pointer ${
                   isParentActive(item)
-                    ? "bg-blue-600 text-white shadow-lg"
-                    : "text-slate-300 hover:bg-slate-700 hover:text-white"
+                    ? "bg-blue-50 text-[#007dc6] font-bold shadow-sm"
+                    : "text-gray-700 hover:bg-blue-50 hover:text-[#007dc6]"
                 }`}
                 onClick={() => {
                   if (item.subItems) {
@@ -151,8 +150,8 @@ export default function LearningManagementSidebar() {
                 <div className="flex items-center gap-3">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
                     isParentActive(item) 
-                      ? "bg-blue-500 text-white" 
-                      : "bg-slate-700 text-slate-400 group-hover:bg-slate-600 group-hover:text-white"
+                      ? "bg-[#007dc6] text-white" 
+                      : "bg-gray-100 text-gray-600 group-hover:bg-blue-100 group-hover:text-[#007dc6]"
                   }`}>
                     <FontAwesomeIcon icon={item.icon} className="text-sm" />
                   </div>
@@ -183,14 +182,14 @@ export default function LearningManagementSidebar() {
                         href={subItem.href}
                         className={`flex items-center gap-3 p-2 rounded-lg transition-all duration-200 text-sm ${
                           isActiveItem(subItem.href)
-                            ? "bg-blue-500 text-white shadow-md"
-                            : "text-slate-400 hover:bg-slate-700 hover:text-white"
+                            ? "bg-[#007dc6] text-white shadow-sm"
+                            : "text-gray-600 hover:bg-blue-50 hover:text-[#007dc6]"
                         }`}
                       >
                         <div className={`w-6 h-6 rounded-md flex items-center justify-center ${
                           isActiveItem(subItem.href)
-                            ? "bg-blue-400"
-                            : "bg-slate-600"
+                            ? "bg-blue-500"
+                            : "bg-gray-200"
                         }`}>
                           <FontAwesomeIcon icon={subItem.icon} className="text-xs" />
                         </div>
@@ -211,12 +210,12 @@ export default function LearningManagementSidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-slate-700">
+      <div className="p-4 border-t border-gray-200">
         <button
           onClick={handleSignOut}
-          className="w-full flex items-center gap-3 p-3 text-slate-400 hover:text-white hover:bg-slate-700 rounded-xl transition-all duration-200"
+          className="w-full flex items-center gap-3 p-3 text-gray-700 hover:text-[#007dc6] hover:bg-blue-50 rounded-xl transition-all duration-200"
         >
-          <div className="w-8 h-8 bg-slate-700 rounded-lg flex items-center justify-center">
+          <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
             <FontAwesomeIcon icon={faSignOutAlt} className="text-sm" />
           </div>
           <span className="font-medium text-sm">Sign Out</span>
