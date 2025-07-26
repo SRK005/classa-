@@ -4,11 +4,13 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
+  --background: #f8fafc;
   --foreground: #171717;
-  --primary: rgba(99, 102, 241, 0.9);
-  --secondary: rgba(165, 180, 252, 0.8);
-  --glass: rgba(255, 255, 255, 0.15);
+  --primary: #a5b4fc; /* pastel indigo */
+  --secondary: #fbcfe8; /* pastel pink */
+  --tertiary: #bbf7d0; /* pastel green */
+  --quaternary: #fef9c3; /* pastel yellow */
+  --glass: rgba(255, 255, 255, 0.35);
   --text: #1E293B;
   --text-light: #64748B;
 }
@@ -28,7 +30,7 @@
 }
 
 body {
-  background: linear-gradient(45deg, #e0e7ff, #f0fdfa);
+  background: linear-gradient(120deg, #f8fafc 0%, #e0e7ff 40%, #fbcfe8 100%);
   color: var(--text);
   min-height: 100vh;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
@@ -36,10 +38,10 @@ body {
 
 .glass {
   background: var(--glass);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.08);
 }
 
 .sidebar {
@@ -329,19 +331,21 @@ body {
 
 /* Enhanced button styles */
 .btn-primary {
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-  color: white;
+  background: linear-gradient(135deg, #a5b4fc 0%, #fbcfe8 100%);
+  color: #1E293B;
   border: none;
   padding: 0.75rem 1.5rem;
   border-radius: 0.75rem;
   font-weight: 500;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px -1px #a5b4fc33;
 }
 
 .btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, #fbcfe8 0%, #a5b4fc 100%);
+  color: #1E293B;
+  box-shadow: 0 10px 24px -3px #fbcfe833;
+  transform: translateY(-2px) scale(1.03);
 }
 
 .btn-primary:active {
@@ -519,4 +523,29 @@ body {
   100% {
     left: 100%;
   }
+}
+
+.stat-card, .course-card, .stats-card, .glass-card {
+  background: linear-gradient(135deg, #fff 60%, #f3f4f6 100%);
+  border-radius: 24px;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.08), 0 1.5px 6px 0 rgba(165, 180, 252, 0.08);
+  border: 1.5px solid #f3f4f6;
+  transition: box-shadow 0.3s, transform 0.3s;
+}
+
+.stat-card:hover, .course-card:hover, .stats-card:hover, .glass-card:hover {
+  box-shadow: 0 16px 40px 0 rgba(165, 180, 252, 0.18), 0 4px 16px 0 rgba(251, 207, 232, 0.10);
+  transform: translateY(-6px) scale(1.02);
+}
+
+/* Pastel accent for cards */
+.stat-card::before, .course-card::before, .glass-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: linear-gradient(120deg, #a5b4fc33 0%, #fbcfe833 100%);
+  opacity: 0.18;
+  z-index: 0;
+  border-radius: 24px;
+  pointer-events: none;
 }

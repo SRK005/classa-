@@ -1,14 +1,35 @@
 "use client";
 import { useState, useEffect } from "react";
-import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs, getDoc, setDoc } from "firebase/firestore";
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { db, auth } from "../../../lib/firebaseClient";
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
+import { db } from "../../../lib/firebaseClient";
 import { useAuth } from "../../contexts/AuthContext";
-import FormCard from "../shared/FormCard";
 import Input from "../shared/Input";
 import Select from "../shared/Select";
-import Button from "../shared/Button";
 import LoadingSpinner from "../shared/LoadingSpinner";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { 
+  faUser, 
+  faEnvelope, 
+  faPhone, 
+  faCalendarAlt, 
+  faMapMarkerAlt, 
+  faUsers, 
+  faGraduationCap,
+  faCheck,
+  faTimes,
+  faExclamationTriangle,
+  faInfoCircle,
+  faEye,
+  faEyeSlash
+} from "@fortawesome/free-solid-svg-icons";
+import { 
+  checkEmailExists, 
+  createStudentWithRelationships, 
+  updateStudent, 
+  formatDateOfBirth, 
+  generateParentPassword 
+} from "../../../lib/userManagement";
+import { createTestStudent } from "../../../lib/testStudentCreation";
 
 interface StudentFormProps {
   studentId?: string;
@@ -33,48 +54,56 @@ interface ClassOption {
   label: string;
 }
 
-interface ExistingParent {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  children: string[];
-}
-
 export default function StudentForm({ studentId, initialData, onSuccess, onCancel }: StudentFormProps) {
   const { user, schoolId } = useAuth();
+  
+  // Form state
   const [formData, setFormData] = useState({
     name: initialData?.name || "",
     email: initialData?.email || "",
     phone: initialData?.phone || "",
     rollNumber: initialData?.rollNumber || "",
     classId: initialData?.classId || "",
-    parentName: initialData?.parentName || "",
-    parentPhone: initialData?.parentPhone || "",
-    parentEmail: initialData?.parentEmail || "",
     dateOfBirth: initialData?.dateOfBirth ? 
       (initialData.dateOfBirth.toDate ? initialData.dateOfBirth.toDate().toISOString().split('T')[0] : "") : "",
     address: initialData?.address || "",
+    parentName: initialData?.parentName || "",
+    parentPhone: initialData?.parentPhone || "",
+    parentEmail: initialData?.parentEmail || "",
+    parentOccupation: "",
+    parentAddress: "",
+    createParentLogin: true
   });
+
+  // UI state
   const [classes, setClasses] = useState<ClassOption[]>([]);
   const [loading, setLoading] = useState(false);
-  const [loadingClasses, setLoadingClasses] = useState(true);
-  const [loadingParent, setLoadingParent] = useState(false);
+  const [loadingClasses, setLoadingClasses] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [existingParent, setExistingParent] = useState<ExistingParent | null>(null);
+  const [emailChecking, setEmailChecking] = useState(false);
+  const [parentEmailChecking, setParentEmailChecking] = useState(false);
+  const [showPasswords, setShowPasswords] = useState(false);
+  const [existingParent, setExistingParent] = useState<any>(null);
 
   useEffect(() => {
-    fetchClasses();
+    if (schoolId) {
+      fetchClasses();
+    }
   }, [schoolId]);
 
-  // Lookup existing parent when parent email changes
+  // Check email availability in real-time
   useEffect(() => {
-    if (formData.parentEmail && formData.parentEmail.includes('@') && formData.parentEmail.includes('.')) {
-      lookupExistingParent(formData.parentEmail);
-    } else {
-      setExistingParent(null);
+    if (formData.email && formData.email.includes('@') && !studentId) {
+      checkEmailAvailability(formData.email);
     }
-  }, [formData.parentEmail]);
+  }, [formData.email, studentId]);
+
+  // Check parent email and lookup existing parent
+  useEffect(() => {
+    if (formData.parentEmail && formData.parentEmail.includes('@') && !studentId) {
+      checkParentEmailAndLookup(formData.parentEmail);
+    }
+  }, [formData.parentEmail, studentId]);
 
   const fetchClasses = async () => {
     if (!schoolId) return;
@@ -95,18 +124,42 @@ export default function StudentForm({ studentId, initialData, onSuccess, onCance
       setClasses(classOptions);
     } catch (error) {
       console.error("Error fetching classes:", error);
-      setErrors({ classes: "Failed to load classes" });
+      setErrors(prev => ({ ...prev, classes: "Failed to load classes" }));
     } finally {
       setLoadingClasses(false);
     }
   };
 
-  const lookupExistingParent = async (email: string) => {
-    setLoadingParent(true);
+  const checkEmailAvailability = async (email: string) => {
+    setEmailChecking(true);
     try {
+      const exists = await checkEmailExists(email);
+      if (exists) {
+        setErrors(prev => ({ ...prev, email: "This email is already registered" }));
+      } else {
+        setErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors.email;
+          return newErrors;
+        });
+      }
+    } catch (error) {
+      console.error("Error checking email:", error);
+    } finally {
+      setEmailChecking(false);
+    }
+  };
+
+  const checkParentEmailAndLookup = async (email: string) => {
+    setParentEmailChecking(true);
+    try {
+      // Check if email exists in users collection
+      const emailExists = await checkEmailExists(email);
+      
+      // Look for existing parent in parents collection
       const parentQuery = query(
         collection(db, "parents"),
-        where("email", "==", email.trim().toLowerCase())
+        where("email", "==", email.toLowerCase().trim())
       );
       const parentSnapshot = await getDocs(parentQuery);
       
@@ -116,31 +169,51 @@ export default function StudentForm({ studentId, initialData, onSuccess, onCance
         
         setExistingParent({
           id: parentDoc.id,
-          name: parentData.name,
-          email: parentData.email,
-          phone: parentData.phone,
-          children: parentData.children || []
+          ...parentData
         });
         
         // Auto-fill parent information
         setFormData(prev => ({
           ...prev,
-          parentName: parentData.name,
-          parentPhone: parentData.phone
+          parentName: parentData.name || prev.parentName,
+          parentPhone: parentData.phone || prev.parentPhone,
+          parentOccupation: parentData.occupation || prev.parentOccupation,
+          parentAddress: parentData.address || prev.parentAddress,
+          createParentLogin: !!parentData.hasLoginAccess
         }));
+        
+        setErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors.parentEmail;
+          return newErrors;
+        });
       } else {
         setExistingParent(null);
+        
+        if (emailExists && formData.createParentLogin) {
+          setErrors(prev => ({ 
+            ...prev, 
+            parentEmail: "This email is already registered. Uncheck 'Create Parent Login' to continue or use a different email." 
+          }));
+        } else {
+          setErrors(prev => {
+            const newErrors = { ...prev };
+            delete newErrors.parentEmail;
+            return newErrors;
+          });
+        }
       }
     } catch (error) {
-      console.error("Error looking up parent:", error);
+      console.error("Error checking parent email:", error);
     } finally {
-      setLoadingParent(false);
+      setParentEmailChecking(false);
     }
   };
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
+    // Student validation
     if (!formData.name.trim()) {
       newErrors.name = "Student name is required";
     }
@@ -151,10 +224,6 @@ export default function StudentForm({ studentId, initialData, onSuccess, onCance
       newErrors.email = "Please enter a valid email address";
     }
 
-    if (!formData.dateOfBirth) {
-      newErrors.dateOfBirth = "Date of birth is required";
-    }
-
     if (!formData.rollNumber.trim()) {
       newErrors.rollNumber = "Roll number is required";
     }
@@ -163,18 +232,23 @@ export default function StudentForm({ studentId, initialData, onSuccess, onCance
       newErrors.classId = "Class is required";
     }
 
-    if (!formData.parentName.trim()) {
-      newErrors.parentName = "Parent name is required";
+    if (!formData.dateOfBirth) {
+      newErrors.dateOfBirth = "Date of birth is required";
     }
 
-    if (!formData.parentPhone.trim()) {
-      newErrors.parentPhone = "Parent phone is required";
+    // Parent validation
+    if (!formData.parentName.trim()) {
+      newErrors.parentName = "Parent name is required";
     }
 
     if (!formData.parentEmail.trim()) {
       newErrors.parentEmail = "Parent email is required";
     } else if (!/\S+@\S+\.\S+/.test(formData.parentEmail)) {
       newErrors.parentEmail = "Please enter a valid parent email address";
+    }
+
+    if (!formData.parentPhone.trim()) {
+      newErrors.parentPhone = "Parent phone is required";
     }
 
     if (!schoolId) {
@@ -185,328 +259,414 @@ export default function StudentForm({ studentId, initialData, onSuccess, onCance
     return Object.keys(newErrors).length === 0;
   };
 
-  const createFirebaseUser = async (email: string, password: string, displayName: string) => {
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      return userCredential.user;
-    } catch (error: any) {
-      if (error.code === 'auth/email-already-in-use') {
-        // User already exists, that's okay for our use case
-        return null;
-      }
-      throw error;
-    }
-  };
-
-  const formatDateOfBirth = (dateString: string) => {
-    // Convert date to DDMMYYYY format for password
-    const date = new Date(dateString);
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    return `${day}${month}${year}`;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
 
     setLoading(true);
-    const currentUser = auth.currentUser;
-
     try {
-      // For editing, we don't create new users
       if (studentId) {
-        const studentData = {
+        // Update existing student
+        const updates = {
           name: formData.name.trim(),
           email: formData.email.trim().toLowerCase(),
-          phone: formData.phone.trim() || null,
+          phone: formData.phone.trim() || "",
           rollNumber: formData.rollNumber.trim(),
           classId: doc(db, "classes", formData.classId),
-          parentName: formData.parentName.trim(),
-          parentPhone: formData.parentPhone.trim(),
-          parentEmail: formData.parentEmail.trim().toLowerCase(),
           dateOfBirth: new Date(formData.dateOfBirth),
-          address: formData.address.trim() || null,
-          schoolId: doc(db, "school", schoolId!),
-          createdBy: doc(db, "users", user!.uid),
-          updatedAt: serverTimestamp(),
+          address: formData.address.trim() || "",
         };
 
-        await updateDoc(doc(db, "students", studentId), studentData);
+        await updateStudent(studentId, updates);
         onSuccess?.();
-        return;
-      }
+      } else {
+        // Create new student with relationships
+        const studentPassword = formatDateOfBirth(formData.dateOfBirth);
+        const parentPassword = generateParentPassword();
 
-      // For new student creation
-      const dobPassword = formatDateOfBirth(formData.dateOfBirth);
-      const parentPassword = "password";
+        const studentData = {
+          email: formData.email.trim(),
+          name: formData.name.trim(),
+          rollNumber: formData.rollNumber.trim(),
+          classId: doc(db, "classes", formData.classId),
+          dateOfBirth: new Date(formData.dateOfBirth),
+          phone: formData.phone.trim() || "",
+          address: formData.address.trim() || "",
+          admissionDate: new Date(),
+          schoolId: doc(db, "school", schoolId!),
+          isActive: true,
+          createdBy: doc(db, "users", user!.uid)
+        };
 
-      // Create student Firebase Auth user
-      const studentUser = await createFirebaseUser(
-        formData.email.trim().toLowerCase(), 
-        dobPassword, 
-        formData.name.trim()
-      );
-
-      // Create or update parent
-      let parentId = existingParent?.id;
-      let parentUser = null;
-
-      if (existingParent) {
-        // Parent exists, just update if needed
         const parentData = {
+          email: formData.parentEmail.trim(),
           name: formData.parentName.trim(),
           phone: formData.parentPhone.trim(),
-          updatedAt: serverTimestamp(),
+          occupation: formData.parentOccupation.trim() || "",
+          address: formData.parentAddress.trim() || formData.address.trim() || "",
+          schoolId: doc(db, "school", schoolId!),
+          hasLoginAccess: formData.createParentLogin,
+          isActive: true,
+          createdBy: doc(db, "users", user!.uid)
         };
-        await updateDoc(doc(db, "parents", existingParent.id), parentData);
-        parentId = existingParent.id;
-      } else {
-        // Create new parent
-        parentUser = await createFirebaseUser(
-          formData.parentEmail.trim().toLowerCase(), 
-          parentPassword, 
-          formData.parentName.trim()
+
+        console.log("🚀 Creating student with data:", studentData);
+        console.log("🧑‍🎓 Parent data:", parentData);
+        console.log("🔑 Student password:", studentPassword);
+        console.log("👨‍👩‍👧‍👦 Create parent login:", formData.createParentLogin);
+
+        const result = await createStudentWithRelationships(
+          studentData,
+          parentData,
+          studentPassword,
+          parentPassword,
+          formData.createParentLogin
         );
 
-        const parentData = {
-          name: formData.parentName.trim(),
-          email: formData.parentEmail.trim().toLowerCase(),
-          phone: formData.parentPhone.trim(),
-          children: [],
-          schoolId: doc(db, "school", schoolId!),
-          createdBy: doc(db, "users", user!.uid),
-          createdAt: serverTimestamp(),
-        };
-
-        const parentDocRef = await addDoc(collection(db, "parents"), parentData);
-        parentId = parentDocRef.id;
+        console.log("✅ Student creation result:", result);
+        onSuccess?.();
       }
-
-      // Create student document
-      const studentData = {
-        name: formData.name.trim(),
-        email: formData.email.trim().toLowerCase(),
-        phone: formData.phone.trim() || null,
-        rollNumber: formData.rollNumber.trim(),
-        classId: doc(db, "classes", formData.classId),
-        parentId: doc(db, "parents", parentId!),
-        parentName: formData.parentName.trim(),
-        parentPhone: formData.parentPhone.trim(),
-        parentEmail: formData.parentEmail.trim().toLowerCase(),
-        dateOfBirth: new Date(formData.dateOfBirth),
-        address: formData.address.trim() || null,
-        schoolId: doc(db, "school", schoolId!),
-        createdBy: doc(db, "users", user!.uid),
-        createdAt: serverTimestamp(),
-      };
-
-      const studentDocRef = await addDoc(collection(db, "students"), studentData);
-
-      // Update parent's children array
-      if (parentId) {
-        const parentDoc = await getDoc(doc(db, "parents", parentId));
-        if (parentDoc.exists()) {
-          const currentChildren = parentDoc.data().children || [];
-          const updatedChildren = [...currentChildren, studentDocRef.id];
-          
-          await updateDoc(doc(db, "parents", parentId), {
-            children: updatedChildren,
-            updatedAt: serverTimestamp(),
-          });
-        }
-      }
-
-      // Re-authenticate the original user
-      if (currentUser) {
-        try {
-          await signOut(auth);
-          // The AuthContext will handle re-authentication
-        } catch (error) {
-          console.error("Error signing out:", error);
-        }
-      }
-
-      onSuccess?.();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving student:", error);
-      setErrors({ submit: "Failed to save student. Please try again." });
+      setErrors({ submit: error.message || "Failed to save student. Please try again." });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <FormCard title={studentId ? "Edit Student" : "Create New Student"}>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input
-            label="Student Name"
-            type="text"
-            value={formData.name}
-            onChange={(value) => setFormData(prev => ({ ...prev, name: value }))}
-            placeholder="Enter student name"
-            required
-            error={errors.name}
-          />
-
-          <Input
-            label="Roll Number"
-            type="text"
-            value={formData.rollNumber}
-            onChange={(value) => setFormData(prev => ({ ...prev, rollNumber: value }))}
-            placeholder="Enter roll number"
-            required
-            error={errors.rollNumber}
-          />
-        </div>
-
-        <Select
-          label="Class"
-          options={classes}
-          value={formData.classId}
-          onChange={(value) => setFormData(prev => ({ ...prev, classId: value }))}
-          placeholder="Select a class"
-          required
-          disabled={loadingClasses}
-          error={errors.classId}
-        />
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input
-            label="Student Email"
-            type="email"
-            value={formData.email}
-            onChange={(value) => setFormData(prev => ({ ...prev, email: value }))}
-            placeholder="Enter student email address"
-            required
-            error={errors.email}
-          />
-
-          <Input
-            label="Phone (Optional)"
-            type="tel"
-            value={formData.phone}
-            onChange={(value) => setFormData(prev => ({ ...prev, phone: value }))}
-            placeholder="Enter phone number"
-            error={errors.phone}
-          />
-        </div>
-
-        <Input
-          label="Date of Birth"
-          type="date"
-          value={formData.dateOfBirth}
-          onChange={(value) => setFormData(prev => ({ ...prev, dateOfBirth: value }))}
-          required
-          error={errors.dateOfBirth}
-        />
-
-        <div className="border-t pt-4">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Parent Information</h3>
-          
-          <Input
-            label="Parent Email"
-            type="email"
-            value={formData.parentEmail}
-            onChange={(value) => setFormData(prev => ({ ...prev, parentEmail: value }))}
-            placeholder="Enter parent email"
-            required
-            error={errors.parentEmail}
-          />
-
-          {loadingParent && (
-            <div className="flex items-center gap-2 text-blue-600 text-sm mb-2">
-              <LoadingSpinner size="small" />
-              Looking up parent...
+    <div className="h-full overflow-hidden">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-t-xl">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+              <FontAwesomeIcon icon={faGraduationCap} className="text-xl" />
             </div>
-          )}
-
-          {existingParent && (
-            <div className="bg-green-50 border border-green-200 rounded-md p-3 mb-4">
-              <p className="text-green-800 font-medium">Existing Parent Found!</p>
-              <p className="text-green-700 text-sm">
-                {existingParent.name} - {existingParent.children.length} child(ren) already registered
+            <div>
+              <h2 className="text-2xl font-bold">
+                {studentId ? "Edit Student" : "Add New Student"}
+              </h2>
+              <p className="text-blue-100 text-sm">
+                {studentId ? "Update student information" : "Create student account with parent details"}
               </p>
             </div>
+          </div>
+          {onCancel && (
+            <button
+              onClick={onCancel}
+              className="text-white/80 hover:text-white hover:bg-white/10 p-2 rounded-lg transition-all duration-200"
+            >
+              <FontAwesomeIcon icon={faTimes} className="text-lg" />
+            </button>
           )}
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="Parent Name"
-              type="text"
-              value={formData.parentName}
-              onChange={(value) => setFormData(prev => ({ ...prev, parentName: value }))}
-              placeholder="Enter parent name"
-              required
-              error={errors.parentName}
-              disabled={loadingParent}
-            />
-
-            <Input
-              label="Parent Phone"
-              type="tel"
-              value={formData.parentPhone}
-              onChange={(value) => setFormData(prev => ({ ...prev, parentPhone: value }))}
-              placeholder="Enter parent phone"
-              required
-              error={errors.parentPhone}
-              disabled={loadingParent}
-            />
-          </div>
         </div>
+      </div>
 
-        <Input
-          label="Address (Optional)"
-          type="textarea"
-          value={formData.address}
-          onChange={(value) => setFormData(prev => ({ ...prev, address: value }))}
-          placeholder="Enter address"
-          rows={3}
-          error={errors.address}
-        />
+      {/* Form Content */}
+      <div className="h-[calc(100vh-140px)] overflow-y-auto custom-scrollbar">
+        <div className="p-6">
+          <form onSubmit={handleSubmit} className="space-y-8">
+            
+            {/* Student Information Section */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <FontAwesomeIcon icon={faUser} className="text-blue-600 text-sm" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">Student Information</h3>
+              </div>
 
-        {!studentId && (
-          <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-            <p className="text-blue-800 font-medium text-sm">Account Information:</p>
-            <p className="text-blue-700 text-sm">
-              • Student login: {formData.email} (Password: Date of Birth as DDMMYYYY)
-            </p>
-            <p className="text-blue-700 text-sm">
-              • Parent login: {formData.parentEmail} (Password: password)
-            </p>
-          </div>
-        )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Input
+                  label="Full Name"
+                  type="text"
+                  value={formData.name}
+                  onChange={(value) => setFormData(prev => ({ ...prev, name: value }))}
+                  placeholder="Enter student's full name"
+                  required
+                  error={errors.name}
+                />
 
-        {errors.submit && (
-          <div className="text-red-600 text-sm">{errors.submit}</div>
-        )}
+                <div className="relative">
+                  <Input
+                    label="Email Address"
+                    type="email"
+                    value={formData.email}
+                    onChange={(value) => setFormData(prev => ({ ...prev, email: value }))}
+                    placeholder="student@example.com"
+                    required
+                    error={errors.email}
+                    disabled={!!studentId}
+                  />
+                  {emailChecking && (
+                    <div className="absolute right-3 top-9">
+                      <LoadingSpinner size="small" />
+                    </div>
+                  )}
+                </div>
 
-        <div className="flex gap-4 pt-4">
-          <Button
+                <Input
+                  label="Roll Number"
+                  type="text"
+                  value={formData.rollNumber}
+                  onChange={(value) => setFormData(prev => ({ ...prev, rollNumber: value }))}
+                  placeholder="e.g., 001, STU001"
+                  required
+                  error={errors.rollNumber}
+                />
+
+                <Select
+                  label="Class"
+                  options={classes}
+                  value={formData.classId}
+                  onChange={(value) => setFormData(prev => ({ ...prev, classId: value }))}
+                  placeholder="Select a class"
+                  required
+                  disabled={loadingClasses}
+                  error={errors.classId}
+                />
+
+                <Input
+                  label="Date of Birth"
+                  type="date"
+                  value={formData.dateOfBirth}
+                  onChange={(value) => setFormData(prev => ({ ...prev, dateOfBirth: value }))}
+                  required
+                  error={errors.dateOfBirth}
+                />
+
+                <Input
+                  label="Phone Number (Optional)"
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(value) => setFormData(prev => ({ ...prev, phone: value }))}
+                  placeholder="+91 9876543210"
+                  error={errors.phone}
+                />
+              </div>
+
+              <div className="mt-6">
+                <Input
+                  label="Address (Optional)"
+                  type="textarea"
+                  value={formData.address}
+                  onChange={(value) => setFormData(prev => ({ ...prev, address: value }))}
+                  placeholder="Enter complete address"
+                  rows={3}
+                  error={errors.address}
+                />
+              </div>
+            </div>
+
+            {/* Parent Information Section */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                  <FontAwesomeIcon icon={faUsers} className="text-green-600 text-sm" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">Parent Information</h3>
+              </div>
+
+              {existingParent && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                  <div className="flex items-start gap-3">
+                    <FontAwesomeIcon icon={faInfoCircle} className="text-green-600 mt-1" />
+                    <div>
+                      <p className="text-green-800 font-medium">Existing Parent Found</p>
+                      <p className="text-green-700 text-sm">
+                        Parent record exists for {existingParent.name}. Their information has been auto-filled.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Input
+                  label="Parent Name"
+                  type="text"
+                  value={formData.parentName}
+                  onChange={(value) => setFormData(prev => ({ ...prev, parentName: value }))}
+                  placeholder="Enter parent's full name"
+                  required
+                  error={errors.parentName}
+                />
+
+                <div className="relative">
+                  <Input
+                    label="Parent Email"
+                    type="email"
+                    value={formData.parentEmail}
+                    onChange={(value) => setFormData(prev => ({ ...prev, parentEmail: value }))}
+                    placeholder="parent@example.com"
+                    required
+                    error={errors.parentEmail}
+                    disabled={!!studentId}
+                  />
+                  {parentEmailChecking && (
+                    <div className="absolute right-3 top-9">
+                      <LoadingSpinner size="small" />
+                    </div>
+                  )}
+                </div>
+
+                <Input
+                  label="Parent Phone"
+                  type="tel"
+                  value={formData.parentPhone}
+                  onChange={(value) => setFormData(prev => ({ ...prev, parentPhone: value }))}
+                  placeholder="+91 9876543210"
+                  required
+                  error={errors.parentPhone}
+                />
+
+                <Input
+                  label="Occupation (Optional)"
+                  type="text"
+                  value={formData.parentOccupation}
+                  onChange={(value) => setFormData(prev => ({ ...prev, parentOccupation: value }))}
+                  placeholder="e.g., Engineer, Doctor, Teacher"
+                />
+              </div>
+
+              <div className="mt-6">
+                <Input
+                  label="Parent Address (Optional)"
+                  type="textarea"
+                  value={formData.parentAddress}
+                  onChange={(value) => setFormData(prev => ({ ...prev, parentAddress: value }))}
+                  placeholder="If different from student address"
+                  rows={2}
+                />
+              </div>
+
+              {!studentId && !existingParent && (
+                <div className="mt-6">
+                  <label className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={formData.createParentLogin}
+                      onChange={(e) => setFormData(prev => ({ ...prev, createParentLogin: e.target.checked }))}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      Create parent login account
+                    </span>
+                  </label>
+                  <p className="text-xs text-gray-500 mt-1 ml-7">
+                    Allow parent to login and view their child's progress, assignments, and reports
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Login Information */}
+            {!studentId && (
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-lg font-semibold text-blue-900">Login Information</h4>
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswords(!showPasswords)}
+                    className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-2"
+                  >
+                    <FontAwesomeIcon icon={showPasswords ? faEyeSlash : faEye} />
+                    {showPasswords ? "Hide" : "Show"} Passwords
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-white rounded-lg p-4 border border-blue-100">
+                    <h5 className="font-medium text-gray-900 mb-2">Student Login</h5>
+                    <p className="text-sm text-gray-600 mb-2">Email: {formData.email || "student@example.com"}</p>
+                    <p className="text-sm text-gray-600">
+                      Password: {showPasswords 
+                        ? (formData.dateOfBirth ? formatDateOfBirth(formData.dateOfBirth) : "DDMMYYYY")
+                        : "••••••••"
+                      }
+                    </p>
+                    <p className="text-xs text-gray-500 mt-2">Password format: Date of Birth (DDMMYYYY)</p>
+                  </div>
+
+                  {formData.createParentLogin && (
+                    <div className="bg-white rounded-lg p-4 border border-blue-100">
+                      <h5 className="font-medium text-gray-900 mb-2">Parent Login</h5>
+                      <p className="text-sm text-gray-600 mb-2">Email: {formData.parentEmail || "parent@example.com"}</p>
+                      <p className="text-sm text-gray-600">
+                        Password: {showPasswords ? generateParentPassword() : "••••••••"}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-2">Default password (can be changed later)</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Submit Error */}
+            {errors.submit && (
+              <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 p-4 rounded-xl border border-red-200">
+                <FontAwesomeIcon icon={faExclamationTriangle} />
+                <span>{errors.submit}</span>
+              </div>
+            )}
+          </form>
+        </div>
+      </div>
+
+      {/* Fixed Footer */}
+      <div className="bg-gray-50 border-t border-gray-200 p-6 rounded-b-xl">
+        <div className="flex gap-4">
+          <button
             type="submit"
-            loading={loading}
-            disabled={loading || loadingClasses || loadingParent}
-            className="flex-1"
+            onClick={handleSubmit}
+            disabled={loading || loadingClasses || emailChecking || parentEmailChecking}
+            className={`flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed ${
+              loading ? "animate-pulse" : ""
+            }`}
           >
-            {loading ? <LoadingSpinner size="small" /> : null}
-            {studentId ? "Update Student" : "Create Student"}
-          </Button>
+            {loading ? (
+              <LoadingSpinner size="small" />
+            ) : (
+              <FontAwesomeIcon icon={faCheck} />
+            )}
+            {loading ? "Processing..." : (studentId ? "Update Student" : "Create Student")}
+          </button>
+          
+          {/* Temporary Test Button for Debugging */}
+          {!studentId && (
+            <button
+              type="button"
+              onClick={async () => {
+                console.log("🧪 Testing student creation...");
+                const result = await createTestStudent();
+                console.log("Test result:", result);
+                if (result.success) {
+                  alert("Test student created successfully! Check console for details.");
+                  onSuccess?.();
+                } else {
+                  alert(`Test failed: ${result.message}`);
+                }
+              }}
+              className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all duration-200"
+            >
+              🧪 Test Create
+            </button>
+          )}
           
           {onCancel && (
-            <Button
+            <button
               type="button"
-              variant="secondary"
               onClick={onCancel}
               disabled={loading}
-              className="flex-1"
+              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
+              <FontAwesomeIcon icon={faTimes} />
               Cancel
-            </Button>
+            </button>
           )}
         </div>
-      </form>
-    </FormCard>
+      </div>
+    </div>
   );
 } 
