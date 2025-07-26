@@ -116,12 +116,7 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
   const [homeworkData, setHomeworkData] = useState({
     title: initialData?.title || "",
     description: initialData?.description || "",
-    workToDo: initialData?.workToDo || "",
-    dueDate: initialData?.dueDate ? 
-      (initialData.dueDate.toDate ? initialData.dueDate.toDate().toISOString().split('T')[0] : "") : "",
     priority: initialData?.priority || "medium",
-    estimatedTime: initialData?.metadata?.estimatedTime || "",
-    difficulty: initialData?.metadata?.difficulty || "medium",
   });
 
   // Remark specific data
@@ -132,13 +127,6 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
     parentRemarks: initialData?.parentRemarks || "",
     priority: initialData?.priority || "medium",
     category: initialData?.category || "academic",
-    tags: initialData?.tags || [],
-    isPrivate: initialData?.isPrivate || false,
-    visibleToParents: initialData?.visibleToParents ?? true,
-    visibleToStudent: initialData?.visibleToStudent ?? true,
-    followUpRequired: initialData?.followUpRequired || false,
-    followUpDate: initialData?.followUpDate ? 
-      (initialData.followUpDate.toDate ? initialData.followUpDate.toDate().toISOString().split('T')[0] : "") : "",
   });
 
   const [classes, setClasses] = useState<Option[]>([]);
@@ -150,7 +138,6 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
-  const [newTag, setNewTag] = useState("");
 
   useEffect(() => {
     if (initialData?.type) {
@@ -336,23 +323,6 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
     setSelectedFile(null);
   };
 
-  const addTag = () => {
-    if (newTag.trim() && !remarkData.tags.includes(newTag.trim()) && remarkData.tags.length < 10) {
-      setRemarkData(prev => ({
-        ...prev,
-        tags: [...prev.tags, newTag.trim()]
-      }));
-      setNewTag("");
-    }
-  };
-
-  const removeTag = (tagToRemove: string) => {
-    setRemarkData(prev => ({
-      ...prev,
-      tags: prev.tags.filter((tag: string) => tag !== tagToRemove)
-    }));
-  };
-
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
@@ -376,18 +346,6 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
       } else if (homeworkData.description.length < 10 || homeworkData.description.length > 500) {
         newErrors.description = "Description must be between 10 and 500 characters";
       }
-
-      if (!homeworkData.workToDo.trim()) {
-        newErrors.workToDo = "Work to do is required";
-      } else if (homeworkData.workToDo.length < 10 || homeworkData.workToDo.length > 1000) {
-        newErrors.workToDo = "Work to do must be between 10 and 1000 characters";
-      }
-
-      if (!homeworkData.dueDate) {
-        newErrors.dueDate = "Due date is required";
-      } else if (new Date(homeworkData.dueDate) <= new Date()) {
-        newErrors.dueDate = "Due date must be in the future";
-      }
     }
 
     if (entryType === "remark") {
@@ -407,10 +365,6 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
 
       if (remarkData.parentRemarks && remarkData.parentRemarks.length > 500) {
         newErrors.parentRemarks = "Parent remarks must be less than 500 characters";
-      }
-
-      if (remarkData.followUpRequired && !remarkData.followUpDate) {
-        newErrors.followUpDate = "Follow-up date is required when follow-up is needed";
       }
     }
 
@@ -463,13 +417,9 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
           ...baseData,
           title: homeworkData.title.trim(),
           description: homeworkData.description.trim(),
-          workToDo: homeworkData.workToDo.trim(),
-          dueDate: new Date(homeworkData.dueDate),
           priority: homeworkData.priority,
           status: "active",
           metadata: {
-            estimatedTime: homeworkData.estimatedTime,
-            difficulty: homeworkData.difficulty,
             isAssignment: true
           }
         };
@@ -483,12 +433,6 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
           parentRemarks: remarkData.parentRemarks.trim(),
           priority: remarkData.priority,
           category: remarkData.category,
-          tags: remarkData.tags,
-          isPrivate: remarkData.isPrivate,
-          visibleToParents: remarkData.visibleToParents,
-          visibleToStudent: remarkData.visibleToStudent,
-          followUpRequired: remarkData.followUpRequired,
-          followUpDate: remarkData.followUpDate ? new Date(remarkData.followUpDate) : null,
           status: "active"
         };
         collectionName = "remarks";
@@ -541,17 +485,6 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
             required
             error={errors.description}
           />
-
-          <Input
-            label="Work to Do"
-            type="textarea"
-            value={homeworkData.workToDo}
-            onChange={(value) => setHomeworkData(prev => ({ ...prev, workToDo: value }))}
-            placeholder="Detailed instructions for students on what work needs to be completed..."
-            rows={4}
-            required
-            error={errors.workToDo}
-          />
         </div>
       </div>
 
@@ -589,25 +522,16 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
         </div>
       </div>
 
-      {/* Schedule & Priority */}
+      {/* Priority */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 form-section">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
             <FontAwesomeIcon icon={faCalendarAlt} className="text-orange-600 text-sm" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900">Schedule & Priority</h3>
+          <h3 className="text-lg font-semibold text-gray-900">Priority</h3>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Input
-            label="Due Date"
-            type="date"
-            value={homeworkData.dueDate}
-            onChange={(value) => setHomeworkData(prev => ({ ...prev, dueDate: value }))}
-            required
-            error={errors.dueDate}
-          />
-
           <Select
             label="Priority"
             options={Object.values(PRIORITY_LEVELS).map(level => ({
@@ -617,27 +541,6 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
             value={homeworkData.priority}
             onChange={(value) => setHomeworkData(prev => ({ ...prev, priority: value }))}
             required
-          />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-          <Input
-            label="Estimated Time"
-            type="text"
-            value={homeworkData.estimatedTime}
-            onChange={(value) => setHomeworkData(prev => ({ ...prev, estimatedTime: value }))}
-            placeholder="e.g., 45 minutes"
-          />
-
-          <Select
-            label="Difficulty"
-            options={[
-              { value: "easy", label: "Easy" },
-              { value: "medium", label: "Medium" },
-              { value: "hard", label: "Hard" }
-            ]}
-            value={homeworkData.difficulty}
-            onChange={(value) => setHomeworkData(prev => ({ ...prev, difficulty: value }))}
           />
         </div>
       </div>
@@ -805,136 +708,7 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
         </div>
       </div>
 
-      {/* Tags */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 form-section">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-8 h-8 bg-pink-100 rounded-lg flex items-center justify-center">
-            <FontAwesomeIcon icon={faTags} className="text-pink-600 text-sm" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900">Tags</h3>
-        </div>
-        
-        <div className="space-y-4">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={newTag}
-              onChange={(e) => setNewTag(e.target.value)}
-              placeholder="Add a tag..."
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-            />
-            <button
-              type="button"
-              onClick={addTag}
-              disabled={!newTag.trim() || remarkData.tags.includes(newTag.trim()) || remarkData.tags.length >= 10}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              <FontAwesomeIcon icon={faPlus} />
-              Add
-            </button>
-          </div>
 
-                     {remarkData.tags.length > 0 && (
-             <div className="flex flex-wrap gap-2">
-               {remarkData.tags.map((tag: string, index: number) => (
-                 <span
-                   key={index}
-                   className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center gap-2"
-                 >
-                   {tag}
-                   <button
-                     type="button"
-                     onClick={() => removeTag(tag)}
-                     className="text-blue-600 hover:text-blue-800"
-                   >
-                     <FontAwesomeIcon icon={faMinus} className="text-xs" />
-                   </button>
-                 </span>
-               ))}
-             </div>
-           )}
-        </div>
-      </div>
-
-      {/* Visibility & Follow-up */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 form-section">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center">
-            <FontAwesomeIcon icon={faEye} className="text-teal-600 text-sm" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900">Visibility & Follow-up</h3>
-        </div>
-        
-        <div className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-4">Visibility Settings</label>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <FontAwesomeIcon icon={remarkData.isPrivate ? faEyeSlash : faEye} className="text-gray-600" />
-                  <span className="text-sm font-medium">Private Remark</span>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={remarkData.isPrivate}
-                  onChange={(e) => setRemarkData(prev => ({ ...prev, isPrivate: e.target.checked }))}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <FontAwesomeIcon icon={faHome} className="text-gray-600" />
-                  <span className="text-sm font-medium">Visible to Parents</span>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={remarkData.visibleToParents}
-                  onChange={(e) => setRemarkData(prev => ({ ...prev, visibleToParents: e.target.checked }))}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <FontAwesomeIcon icon={faUserGraduate} className="text-gray-600" />
-                  <span className="text-sm font-medium">Visible to Student</span>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={remarkData.visibleToStudent}
-                  onChange={(e) => setRemarkData(prev => ({ ...prev, visibleToStudent: e.target.checked }))}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <label className="block text-sm font-medium text-gray-700">Follow-up Required</label>
-              <input
-                type="checkbox"
-                checked={remarkData.followUpRequired}
-                onChange={(e) => setRemarkData(prev => ({ ...prev, followUpRequired: e.target.checked }))}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-            </div>
-
-            {remarkData.followUpRequired && (
-              <Input
-                label="Follow-up Date"
-                type="date"
-                value={remarkData.followUpDate}
-                onChange={(value) => setRemarkData(prev => ({ ...prev, followUpDate: value }))}
-                required={remarkData.followUpRequired}
-                error={errors.followUpDate}
-              />
-            )}
-          </div>
-        </div>
-      </div>
     </div>
   );
 
@@ -1143,40 +917,38 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
                 <span>{errors.submit}</span>
               </div>
             )}
-          </form>
-        </div>
-      </div>
 
-      {/* Fixed Footer */}
-      <div className="bg-gray-50 border-t border-gray-200 p-6 rounded-b-xl">
-        <div className="flex gap-4">
-          <button
-            type="submit"
-            onClick={handleSubmit}
-            disabled={loading || loadingData || uploading}
-            className={`flex-1 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white px-6 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed btn-loading ${
-              loading || uploading ? "animate-pulse" : ""
-            }`}
-          >
-            {loading || uploading ? (
-              <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
-            ) : (
-              <FontAwesomeIcon icon={faCheck} />
-            )}
-            {loading || uploading ? "Processing..." : (entryId ? "Update Entry" : `Create ${entryType === "homework" ? "Homework" : "Remark"}`)}
-          </button>
-          
-          {onCancel && (
-            <button
-              type="button"
-              onClick={onCancel}
-              disabled={loading || uploading}
-              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <FontAwesomeIcon icon={faTimes} />
-              Cancel
-            </button>
-          )}
+            {/* Submit Button */}
+            <div className="flex gap-4 mt-8">
+              <button
+                type="submit"
+                onClick={handleSubmit}
+                disabled={loading || loadingData || uploading}
+                className={`flex-1 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white px-6 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed btn-loading ${
+                  loading || uploading ? "animate-pulse" : ""
+                }`}
+              >
+                {loading || uploading ? (
+                  <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
+                ) : (
+                  <FontAwesomeIcon icon={faCheck} />
+                )}
+                {loading || uploading ? "Processing..." : (entryId ? "Update Entry" : `Create ${entryType === "homework" ? "Homework" : "Remark"}`)}
+              </button>
+              
+              {onCancel && (
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  disabled={loading || uploading}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <FontAwesomeIcon icon={faTimes} />
+                  Cancel
+                </button>
+              )}
+                        </div>
+          </form>
         </div>
       </div>
     </div>
