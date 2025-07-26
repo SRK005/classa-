@@ -55,7 +55,7 @@ interface RemarkEntry {
   parentRemarks?: string;
   priority: string;
   category: string;
-  tags: string[];
+  tags?: string[];
   visibleToParents: boolean;
   visibleToStudent: boolean;
   followUpRequired: boolean;
@@ -542,7 +542,7 @@ export default function DiaryManagementPage() {
                                   <span className="font-medium">Student:</span> {entry.studentName}
                                 </div>
                               )}
-                              {entry.tags.length > 0 && (
+                              {entry.tags && entry.tags.length > 0 && (
                                 <div className="flex flex-wrap gap-1 mb-2">
                                   {entry.tags.slice(0, 3).map((tag: string, index: number) => (
                                     <span key={index} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
