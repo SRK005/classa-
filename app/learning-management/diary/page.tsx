@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { collection, query, where, getDocs, deleteDoc, doc, getDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, deleteDoc, doc, getDoc, DocumentReference } from "firebase/firestore";
 import { db } from "../../../lib/firebaseClient";
 import { useAuth } from "../../contexts/AuthContext";
 import LearningManagementSidebar from "../components/LearningManagementSidebar";
@@ -39,8 +39,8 @@ interface HomeworkEntry {
     estimatedTime?: string;
     difficulty?: string;
   };
-  classId: string;
-  subjectId: string;
+  classId: DocumentReference;
+  subjectId: DocumentReference;
   attachments?: any[];
   createdAt: any;
   updatedAt?: any;
@@ -49,7 +49,7 @@ interface HomeworkEntry {
 interface RemarkEntry {
   id: string;
   type: "remark";
-  studentId: string;
+  studentId: DocumentReference;
   personalRemarks: string;
   workRemarks?: string;
   parentRemarks?: string;
@@ -60,8 +60,8 @@ interface RemarkEntry {
   visibleToStudent: boolean;
   followUpRequired: boolean;
   followUpDate?: any;
-  classId: string;
-  subjectId: string;
+  classId: DocumentReference;
+  subjectId?: DocumentReference;
   attachments?: any[];
   createdAt: any;
   updatedAt?: any;
@@ -143,10 +143,10 @@ export default function DiaryManagementPage() {
         let className = "Unknown Class";
         try {
           if (entry.classId) {
-            const classRef = entry.classId;
-            const classDoc = await getDoc(doc(db, "classes", classRef));
+            const classDoc = await getDoc(entry.classId);
             if (classDoc.exists()) {
-              className = classDoc.data().name;
+              const classData = classDoc.data();
+              className = classData?.name || "Unknown Class";
             }
           }
         } catch (error) {
@@ -157,10 +157,10 @@ export default function DiaryManagementPage() {
         let subjectName = "Unknown Subject";
         try {
           if (entry.subjectId) {
-            const subjectRef = entry.subjectId;
-            const subjectDoc = await getDoc(doc(db, "subjects", subjectRef));
+            const subjectDoc = await getDoc(entry.subjectId);
             if (subjectDoc.exists()) {
-              subjectName = subjectDoc.data().name;
+              const subjectData = subjectDoc.data();
+              subjectName = subjectData?.name || "Unknown Subject";
             }
           }
         } catch (error) {
@@ -171,10 +171,10 @@ export default function DiaryManagementPage() {
         let studentName = "";
         if (entry.type === "remark") {
           try {
-            const studentRef = entry.studentId;
-            const studentDoc = await getDoc(doc(db, "users", studentRef));
+            const studentDoc = await getDoc(entry.studentId);
             if (studentDoc.exists()) {
-              studentName = studentDoc.data().name || studentDoc.data().email;
+              const studentData = studentDoc.data();
+              studentName = studentData?.name || studentData?.email || "Unknown Student";
             }
           } catch (error) {
             console.error("Error fetching student name:", error);
