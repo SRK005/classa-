@@ -243,6 +243,7 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
     
     console.log("Fetching students for class:", classId, "school:", schoolId);
     try {
+      // First, try to fetch from students collection
       const studentsQuery = query(
         collection(db, "students"),
         where("schoolId", "==", doc(db, "school", schoolId)),
@@ -250,16 +251,44 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
       );
       const studentsSnapshot = await getDocs(studentsQuery);
       
-      console.log("Students found:", studentsSnapshot.size);
+      console.log("Students found in students collection:", studentsSnapshot.size);
       
-      const studentOptions: Option[] = studentsSnapshot.docs.map(doc => {
+      let studentOptions: Option[] = [];
+      
+      // Process students from students collection
+      studentsSnapshot.docs.forEach(doc => {
         const data = doc.data();
-        console.log("Student data:", data);
-        return {
-          value: doc.id,
+        console.log("Student data from students collection:", data);
+        // Use the userId from students collection as the value
+        const userId = data.userId || doc.id;
+        studentOptions.push({
+          value: userId, // This should be the user ID
           label: data.name || data.email || "Unknown Student"
-        };
+        });
       });
+      
+      // If no students found in students collection, try users collection
+      if (studentOptions.length === 0) {
+        console.log("No students found in students collection, trying users collection...");
+        const usersQuery = query(
+          collection(db, "users"),
+          where("role", "==", "student"),
+          where("schoolId", "==", doc(db, "school", schoolId)),
+          where("class_id", "==", doc(db, "classes", classId))
+        );
+        const usersSnapshot = await getDocs(usersQuery);
+        
+        console.log("Students found in users collection:", usersSnapshot.size);
+        
+        usersSnapshot.docs.forEach(doc => {
+          const data = doc.data();
+          console.log("Student data from users collection:", data);
+          studentOptions.push({
+            value: doc.id, // Use the user document ID
+            label: data.display_name || data.email || "Unknown Student"
+          });
+        });
+      }
       
       setStudents(studentOptions);
     } catch (error) {
@@ -383,6 +412,11 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
 
     setLoading(true);
     try {
+      // Debug logging for student ID
+      if (entryType === "remark") {
+        console.log("Creating remark with student ID:", remarkData.studentId);
+        console.log("Selected student data:", remarkData);
+      }
       let attachmentUrl = "";
       let attachmentName = "";
 
@@ -434,8 +468,8 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
           ...baseData,
           studentId: doc(db, "users", remarkData.studentId),
           personalRemarks: remarkData.personalRemarks.trim(),
-          workRemarks: remarkData.workRemarks.trim(),
-          parentRemarks: remarkData.parentRemarks.trim(),
+          workRemarks: remarkData.workRemarks?.trim() || "",
+          parentRemarks: remarkData.parentRemarks?.trim() || "",
           priority: remarkData.priority,
           category: remarkData.category,
           status: "active"
@@ -579,7 +613,11 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
             label="Student"
             options={students}
             value={remarkData.studentId}
-            onChange={(value) => setRemarkData(prev => ({ ...prev, studentId: value }))}
+            onChange={(value) => {
+              console.log("Student selected:", value);
+              console.log("Available students:", students);
+              setRemarkData(prev => ({ ...prev, studentId: value }));
+            }}
             placeholder="Select a student"
             required
             disabled={!commonData.classId}
