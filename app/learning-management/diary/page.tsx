@@ -11,33 +11,81 @@ import {
   faPlus,
   faEdit,
   faTrash,
-  faCalendarDay,
+  faBookOpen,
   faExclamationTriangle,
+  faCalendarAlt,
   faUser,
-  faBook,
+  faGraduationCap,
   faComments,
   faClipboard,
   faSearch,
   faFileAlt,
+  faUserCheck,
+  faCalendarCheck,
+  faChartLine,
+  faBook,
   faUsers
 } from "@fortawesome/free-solid-svg-icons";
 
-interface DiaryEntry {
+interface HomeworkEntry {
   id: string;
-  content: string;
-  classId: any;
-  subjectId: any;
-  schoolId: any;
-  createdBy: any;
+  type: "homework";
+  title: string;
+  description: string;
+  workToDo: string;
+  dueDate: any;
+  priority: string;
+  metadata: {
+    estimatedTime?: string;
+    difficulty?: string;
+  };
+  classId: string;
+  subjectId: string;
   attachments?: any[];
   createdAt: any;
   updatedAt?: any;
 }
 
+interface RemarkEntry {
+  id: string;
+  type: "remark";
+  studentId: string;
+  personalRemarks: string;
+  workRemarks?: string;
+  parentRemarks?: string;
+  priority: string;
+  category: string;
+  tags: string[];
+  visibleToParents: boolean;
+  visibleToStudent: boolean;
+  followUpRequired: boolean;
+  followUpDate?: any;
+  classId: string;
+  subjectId: string;
+  attachments?: any[];
+  createdAt: any;
+  updatedAt?: any;
+}
+
+type DiaryEntry = HomeworkEntry | RemarkEntry;
+
 type DiaryEntryWithDetails = DiaryEntry & {
   className: string;
   subjectName: string;
-  createdByName: string;
+  studentName?: string;
+};
+
+const PRIORITY_COLORS = {
+  high: { color: "#ef4444", bgColor: "#fef2f2" },
+  medium: { color: "#f59e0b", bgColor: "#fffbeb" },
+  low: { color: "#10b981", bgColor: "#f0fdf4" }
+};
+
+const CATEGORY_ICONS = {
+  academic: faGraduationCap,
+  behavior: faUserCheck,
+  attendance: faCalendarCheck,
+  performance: faChartLine
 };
 
 export default function DiaryManagementPage() {
@@ -48,6 +96,8 @@ export default function DiaryManagementPage() {
   const [editingEntry, setEditingEntry] = useState<DiaryEntry | null>(null);
   const [error, setError] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState<"all" | "homework" | "remark">("all");
+  const [filterPriority, setFilterPriority] = useState<"all" | "high" | "medium" | "low">("all");
 
   useEffect(() => {
     if (!authLoading) {
@@ -67,25 +117,36 @@ export default function DiaryManagementPage() {
     setError("");
     
     try {
-      // Fetch diary entries
-      const diaryQuery = query(
-        collection(db, "diary_entries"),
+      // Fetch homework entries
+      const homeworkQuery = query(
+        collection(db, "homeworks"),
         where("schoolId", "==", doc(db, "school", schoolId))
       );
-      const diarySnapshot = await getDocs(diaryQuery);
+      const homeworkSnapshot = await getDocs(homeworkQuery);
+      
+      // Fetch remark entries
+      const remarkQuery = query(
+        collection(db, "remarks"),
+        where("schoolId", "==", doc(db, "school", schoolId))
+      );
+      const remarkSnapshot = await getDocs(remarkQuery);
 
-      const entries = diarySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const allEntries = [
+        ...homeworkSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), type: "homework" as const })),
+        ...remarkSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), type: "remark" as const }))
+      ];
 
-      const entryPromises = entries.map(async (entryData: any) => {
+      const entryPromises = allEntries.map(async (entryData: any) => {
         const entry = entryData as DiaryEntry;
 
         // Fetch class name
         let className = "Unknown Class";
         try {
           if (entry.classId) {
-            const classDoc = await getDoc(entry.classId as any);
+            const classRef = entry.classId;
+            const classDoc = await getDoc(doc(db, "classes", classRef));
             if (classDoc.exists()) {
-              className = (classDoc.data() as any).name;
+              className = classDoc.data().name;
             }
           }
         } catch (error) {
@@ -96,34 +157,35 @@ export default function DiaryManagementPage() {
         let subjectName = "Unknown Subject";
         try {
           if (entry.subjectId) {
-            const subjectDoc = await getDoc(entry.subjectId as any);
+            const subjectRef = entry.subjectId;
+            const subjectDoc = await getDoc(doc(db, "subjects", subjectRef));
             if (subjectDoc.exists()) {
-              subjectName = (subjectDoc.data() as any).name;
+              subjectName = subjectDoc.data().name;
             }
           }
         } catch (error) {
           console.error("Error fetching subject name:", error);
         }
 
-        // Fetch creator name
-        let createdByName = "Unknown User";
-        try {
-          if (entry.createdBy) {
-            const userDoc = await getDoc(entry.createdBy as any);
-            if (userDoc.exists()) {
-              const userData = userDoc.data() as any;
-              createdByName = userData.name || userData.email || "Unknown User";
+        // Fetch student name for remarks
+        let studentName = "";
+        if (entry.type === "remark") {
+          try {
+            const studentRef = entry.studentId;
+            const studentDoc = await getDoc(doc(db, "users", studentRef));
+            if (studentDoc.exists()) {
+              studentName = studentDoc.data().name || studentDoc.data().email;
             }
+          } catch (error) {
+            console.error("Error fetching student name:", error);
           }
-        } catch (error) {
-          console.error("Error fetching creator name:", error);
         }
 
         return {
           ...entry,
           className,
           subjectName,
-          createdByName,
+          studentName,
         };
       });
 
@@ -145,13 +207,14 @@ export default function DiaryManagementPage() {
     }
   };
 
-  const handleDeleteEntry = async (entryId: string) => {
-    if (!window.confirm("Are you sure you want to delete this diary entry?")) {
+  const handleDeleteEntry = async (entryId: string, entryType: string) => {
+    if (!window.confirm("Are you sure you want to delete this entry?")) {
       return;
     }
 
     try {
-      await deleteDoc(doc(db, "diary_entries", entryId));
+      const collectionName = entryType === "homework" ? "homeworks" : "remarks";
+      await deleteDoc(doc(db, collectionName, entryId));
       setDiaryEntries(diaryEntries.filter(entry => entry.id !== entryId));
     } catch (error) {
       console.error("Error deleting entry:", error);
@@ -177,35 +240,42 @@ export default function DiaryManagementPage() {
 
   const formatDate = (date: any) => {
     if (!date) return "N/A";
-    const dateObj = date.toDate ? date.toDate() : new Date(date);
-    return dateObj.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return date.toDate ? date.toDate().toLocaleDateString() : "N/A";
+  };
+
+  const getPriorityColor = (priority: string) => {
+    return PRIORITY_COLORS[priority as keyof typeof PRIORITY_COLORS] || PRIORITY_COLORS.medium;
   };
 
   const filteredEntries = diaryEntries.filter(entry => {
-    const matchesSearch = 
-      entry.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      entry.className.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      entry.subjectName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      entry.createdByName.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (
+      (entry.type === "homework" && (
+        entry.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        entry.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        entry.workToDo.toLowerCase().includes(searchTerm.toLowerCase())
+      )) ||
+      (entry.type === "remark" && (
+        entry.personalRemarks.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (entry.workRemarks && entry.workRemarks.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (entry.parentRemarks && entry.parentRemarks.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (entry.studentName && entry.studentName.toLowerCase().includes(searchTerm.toLowerCase()))
+      ))
+    ) || entry.className.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      entry.subjectName.toLowerCase().includes(searchTerm.toLowerCase());
 
-    return matchesSearch;
+    const matchesType = filterType === "all" || entry.type === filterType;
+    const matchesPriority = filterPriority === "all" || entry.priority === filterPriority;
+
+    return matchesSearch && matchesType && matchesPriority;
   });
 
   const getStats = () => {
     const total = diaryEntries.length;
-    const today = diaryEntries.filter(entry => {
-      const entryDate = entry.createdAt?.toDate?.() || new Date(entry.createdAt);
-      const today = new Date();
-      return entryDate.toDateString() === today.toDateString();
-    }).length;
+    const homework = diaryEntries.filter(entry => entry.type === "homework").length;
+    const remarks = diaryEntries.filter(entry => entry.type === "remark").length;
+    const highPriority = diaryEntries.filter(entry => entry.priority === "high").length;
     
-    return { total, today };
+    return { total, homework, remarks, highPriority };
   };
 
   const stats = getStats();
@@ -257,20 +327,20 @@ export default function DiaryManagementPage() {
           {/* Header */}
           <div className="flex justify-between items-center mb-8">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Daily Diary Management</h1>
-              <p className="text-gray-600">Record and manage your daily teaching notes and observations</p>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Diary Management</h1>
+              <p className="text-gray-600">Manage homework assignments and student remarks</p>
             </div>
             <button
               onClick={() => setShowForm(true)}
-              className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-xl font-medium flex items-center gap-2 transition-all duration-200 shadow-lg hover:shadow-xl"
+              className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white px-6 py-3 rounded-xl font-medium flex items-center gap-2 transition-all duration-200 shadow-lg hover:shadow-xl"
             >
               <FontAwesomeIcon icon={faPlus} />
-              Add Daily Notes
+              Add Entry
             </button>
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <div className="bg-white rounded-xl shadow-sm p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -286,28 +356,73 @@ export default function DiaryManagementPage() {
             <div className="bg-white rounded-xl shadow-sm p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Today's Entries</p>
-                  <p className="text-3xl font-bold text-green-600">{stats.today}</p>
+                  <p className="text-sm font-medium text-gray-600">Homework</p>
+                  <p className="text-3xl font-bold text-green-600">{stats.homework}</p>
                 </div>
                 <div className="bg-green-100 p-3 rounded-lg">
-                  <FontAwesomeIcon icon={faCalendarDay} className="text-green-600 text-xl" />
+                  <FontAwesomeIcon icon={faBookOpen} className="text-green-600 text-xl" />
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Remarks</p>
+                  <p className="text-3xl font-bold text-purple-600">{stats.remarks}</p>
+                </div>
+                <div className="bg-purple-100 p-3 rounded-lg">
+                  <FontAwesomeIcon icon={faComments} className="text-purple-600 text-xl" />
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">High Priority</p>
+                  <p className="text-3xl font-bold text-red-600">{stats.highPriority}</p>
+                </div>
+                <div className="bg-red-100 p-3 rounded-lg">
+                  <FontAwesomeIcon icon={faExclamationTriangle} className="text-red-600 text-xl" />
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Search */}
+          {/* Search and Filter */}
           <div className="mb-6 bg-white rounded-xl shadow-sm p-6">
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1 relative">
                 <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Search diary entries..."
+                  placeholder="Search entries..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 />
+              </div>
+              <div className="flex gap-4">
+                <select
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value as any)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                >
+                  <option value="all">All Types</option>
+                  <option value="homework">Homework</option>
+                  <option value="remark">Remarks</option>
+                </select>
+                <select
+                  value={filterPriority}
+                  onChange={(e) => setFilterPriority(e.target.value as any)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                >
+                  <option value="all">All Priorities</option>
+                  <option value="high">High Priority</option>
+                  <option value="medium">Medium Priority</option>
+                  <option value="low">Low Priority</option>
+                </select>
               </div>
             </div>
           </div>
@@ -340,18 +455,18 @@ export default function DiaryManagementPage() {
               {filteredEntries.length === 0 ? (
                 <div className="text-center py-12">
                   <FontAwesomeIcon icon={faClipboard} className="text-gray-400 text-6xl mb-4" />
-                  <h3 className="text-xl font-semibold text-gray-600 mb-2">No diary entries found</h3>
+                  <h3 className="text-xl font-semibold text-gray-600 mb-2">No entries found</h3>
                   <p className="text-gray-500 mb-6">
-                    {searchTerm
-                      ? "Try adjusting your search criteria"
-                      : "Create your first daily diary entry to get started"}
+                    {searchTerm || filterType !== "all" || filterPriority !== "all"
+                      ? "Try adjusting your search or filter criteria"
+                      : "Create your first diary entry to get started"}
                   </p>
                   <button
                     onClick={() => setShowForm(true)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium flex items-center gap-2 mx-auto transition-colors"
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium flex items-center gap-2 mx-auto transition-colors"
                   >
                     <FontAwesomeIcon icon={faPlus} />
-                    Add Daily Notes
+                    Add Entry
                   </button>
                 </div>
               ) : (
@@ -359,18 +474,27 @@ export default function DiaryManagementPage() {
                   {filteredEntries.map((entry) => (
                     <div key={entry.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden">
                       {/* Entry Header */}
-                      <div className="p-4 border-b border-gray-100 bg-blue-50">
+                      <div className={`p-4 border-b`} style={{ backgroundColor: getPriorityColor(entry.priority).bgColor }}>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
                               <FontAwesomeIcon 
-                                icon={faCalendarDay}
-                                className="text-blue-600 text-lg"
+                                icon={entry.type === "homework" ? faBookOpen : faComments}
+                                className="text-lg"
+                                style={{ color: getPriorityColor(entry.priority).color }}
                               />
                             </div>
                             <div>
-                              <h3 className="font-semibold text-gray-900">Daily Notes</h3>
-                              <p className="text-sm text-gray-600">Created by {entry.createdByName}</p>
+                              <h3 className="font-semibold text-gray-900">
+                                {entry.type === "homework" ? "Homework" : "Remark"}
+                              </h3>
+                              <p className="text-sm text-gray-600 flex items-center gap-1">
+                                <span
+                                  className="w-2 h-2 rounded-full"
+                                  style={{ backgroundColor: getPriorityColor(entry.priority).color }}
+                                ></span>
+                                {entry.priority.charAt(0).toUpperCase() + entry.priority.slice(1)} Priority
+                              </p>
                             </div>
                           </div>
                           <div className="text-xs text-gray-500">
@@ -382,9 +506,58 @@ export default function DiaryManagementPage() {
                       <div className="p-4">
                         {/* Content */}
                         <div className="mb-4">
-                          <p className="text-sm text-gray-700 line-clamp-4">
-                            {entry.content}
-                          </p>
+                          {entry.type === "homework" ? (
+                            <div>
+                              <h4 className="font-medium text-gray-900 mb-2 line-clamp-1">
+                                {entry.title}
+                              </h4>
+                              <p className="text-sm text-gray-600 line-clamp-2 mb-2">
+                                {entry.description}
+                              </p>
+                              <div className="text-xs text-gray-500 mb-2">
+                                <span className="font-medium">Due:</span> {formatDate(entry.dueDate)}
+                              </div>
+                              {entry.metadata?.estimatedTime && (
+                                <div className="text-xs text-gray-500">
+                                  <span className="font-medium">Time:</span> {entry.metadata.estimatedTime}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <FontAwesomeIcon 
+                                  icon={CATEGORY_ICONS[entry.category as keyof typeof CATEGORY_ICONS]} 
+                                  className="text-sm text-gray-600"
+                                />
+                                <span className="text-sm font-medium text-gray-600">
+                                  {entry.category.charAt(0).toUpperCase() + entry.category.slice(1)}
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-900 line-clamp-2 mb-2">
+                                {entry.personalRemarks}
+                              </p>
+                              {entry.studentName && (
+                                <div className="text-xs text-gray-500 mb-2">
+                                  <span className="font-medium">Student:</span> {entry.studentName}
+                                </div>
+                              )}
+                              {entry.tags.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mb-2">
+                                  {entry.tags.slice(0, 3).map((tag: string, index: number) => (
+                                    <span key={index} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                                      {tag}
+                                    </span>
+                                  ))}
+                                  {entry.tags.length > 3 && (
+                                    <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-full">
+                                      +{entry.tags.length - 3} more
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         {/* Details */}
@@ -420,7 +593,7 @@ export default function DiaryManagementPage() {
                             Edit
                           </button>
                           <button
-                            onClick={() => handleDeleteEntry(entry.id)}
+                            onClick={() => handleDeleteEntry(entry.id, entry.type)}
                             className="flex-1 bg-red-50 hover:bg-red-100 text-red-600 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
                           >
                             <FontAwesomeIcon icon={faTrash} />
@@ -439,7 +612,7 @@ export default function DiaryManagementPage() {
 
       {showForm && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[95vh] overflow-hidden shadow-xl">
+          <div className="bg-white rounded-xl max-w-5xl w-full max-h-[95vh] overflow-hidden shadow-xl">
             <DiaryForm
               entryId={editingEntry?.id}
               initialData={editingEntry}

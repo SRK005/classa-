@@ -10,18 +10,30 @@ import LoadingSpinner from "../shared/LoadingSpinner";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBookOpen,
+  faComments,
   faCheck,
   faTimes,
+  faCalendarAlt,
   faUsers,
   faBook,
+  faGraduationCap,
   faFileAlt,
   faCloudUpload,
   faSpinner,
   faExclamationTriangle,
   faTrash,
   faFile,
+  faUserCheck,
+  faCalendarCheck,
+  faChartLine,
+  faTags,
+  faEye,
+  faEyeSlash,
   faClipboard,
-  faCalendarDay
+  faUserGraduate,
+  faHome,
+  faPlus,
+  faMinus
 } from "@fortawesome/free-solid-svg-icons";
 
 interface DiaryFormProps {
@@ -36,27 +48,115 @@ interface Option {
   label: string;
 }
 
+const PRIORITY_LEVELS = {
+  high: {
+    value: "high",
+    label: "High Priority",
+    color: "#ef4444",
+    bgColor: "#fef2f2",
+    description: "Requires immediate attention"
+  },
+  medium: {
+    value: "medium",
+    label: "Medium Priority", 
+    color: "#f59e0b",
+    bgColor: "#fffbeb",
+    description: "Moderate attention required"
+  },
+  low: {
+    value: "low",
+    label: "Low Priority",
+    color: "#10b981",
+    bgColor: "#f0fdf4",
+    description: "Can be addressed later"
+  }
+};
+
+const REMARK_CATEGORIES = {
+  academic: {
+    value: "academic",
+    label: "Academic Performance",
+    icon: faGraduationCap,
+    color: "#3b82f6"
+  },
+  behavior: {
+    value: "behavior",
+    label: "Behavior & Conduct", 
+    icon: faUserCheck,
+    color: "#8b5cf6"
+  },
+  attendance: {
+    value: "attendance",
+    label: "Attendance",
+    icon: faCalendarCheck,
+    color: "#06b6d4"
+  },
+  performance: {
+    value: "performance",
+    label: "Overall Performance",
+    icon: faChartLine,
+    color: "#10b981"
+  }
+};
+
 export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }: DiaryFormProps) {
   const { user, schoolId, loading: authLoading } = useAuth();
+  const [entryType, setEntryType] = useState<"homework" | "remark">("homework");
   
   // Debug logging
   console.log("DiaryForm auth state:", { user: user?.uid, schoolId, authLoading });
   
-  // Form data
-  const [formData, setFormData] = useState({
+  // Common form data
+  const [commonData, setCommonData] = useState({
     classId: initialData?.classId || "",
     subjectId: initialData?.subjectId || "",
-    content: initialData?.content || "",
+  });
+
+  // Homework specific data
+  const [homeworkData, setHomeworkData] = useState({
+    title: initialData?.title || "",
+    description: initialData?.description || "",
+    workToDo: initialData?.workToDo || "",
+    dueDate: initialData?.dueDate ? 
+      (initialData.dueDate.toDate ? initialData.dueDate.toDate().toISOString().split('T')[0] : "") : "",
+    priority: initialData?.priority || "medium",
+    estimatedTime: initialData?.metadata?.estimatedTime || "",
+    difficulty: initialData?.metadata?.difficulty || "medium",
+  });
+
+  // Remark specific data
+  const [remarkData, setRemarkData] = useState({
+    studentId: initialData?.studentId || "",
+    personalRemarks: initialData?.personalRemarks || "",
+    workRemarks: initialData?.workRemarks || "",
+    parentRemarks: initialData?.parentRemarks || "",
+    priority: initialData?.priority || "medium",
+    category: initialData?.category || "academic",
+    tags: initialData?.tags || [],
+    isPrivate: initialData?.isPrivate || false,
+    visibleToParents: initialData?.visibleToParents ?? true,
+    visibleToStudent: initialData?.visibleToStudent ?? true,
+    followUpRequired: initialData?.followUpRequired || false,
+    followUpDate: initialData?.followUpDate ? 
+      (initialData.followUpDate.toDate ? initialData.followUpDate.toDate().toISOString().split('T')[0] : "") : "",
   });
 
   const [classes, setClasses] = useState<Option[]>([]);
   const [subjects, setSubjects] = useState<Option[]>([]);
+  const [students, setStudents] = useState<Option[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
+  const [newTag, setNewTag] = useState("");
+
+  useEffect(() => {
+    if (initialData?.type) {
+      setEntryType(initialData.type);
+    }
+  }, [initialData]);
 
   useEffect(() => {
     if (!authLoading && schoolId) {
@@ -68,12 +168,16 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
   }, [schoolId, authLoading]);
 
   useEffect(() => {
-    if (formData.classId) {
-      fetchSubjectsForClass(formData.classId);
+    if (commonData.classId) {
+      fetchSubjectsForClass(commonData.classId);
+      if (entryType === "remark") {
+        fetchStudentsForClass(commonData.classId);
+      }
     } else {
       setSubjects([]);
+      setStudents([]);
     }
-  }, [formData.classId]);
+  }, [commonData.classId, entryType]);
 
   const fetchClasses = async () => {
     if (!schoolId) {
@@ -144,10 +248,43 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
     }
   };
 
+  const fetchStudentsForClass = async (classId: string) => {
+    if (!schoolId || !classId) {
+      console.error("Missing schoolId or classId for fetching students:", { schoolId, classId });
+      return;
+    }
+    
+    console.log("Fetching students for class:", classId, "school:", schoolId);
+    try {
+      const studentsQuery = query(
+        collection(db, "students"),
+        where("schoolId", "==", doc(db, "school", schoolId)),
+        where("classId", "==", doc(db, "classes", classId))
+      );
+      const studentsSnapshot = await getDocs(studentsQuery);
+      
+      console.log("Students found:", studentsSnapshot.size);
+      
+      const studentOptions: Option[] = studentsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        console.log("Student data:", data);
+        return {
+          value: doc.id,
+          label: data.name || data.email || "Unknown Student"
+        };
+      });
+      
+      setStudents(studentOptions);
+    } catch (error) {
+      console.error("Error fetching students:", error);
+      setErrors({ students: "Failed to load students for this class" });
+    }
+  };
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      const maxSize = 5 * 1024 * 1024; // 5MB
+      const maxSize = entryType === "homework" ? 10 * 1024 * 1024 : 5 * 1024 * 1024; // 10MB for homework, 5MB for remarks
       
       if (file.size > maxSize) {
         setErrors({ file: `File size must be less than ${maxSize / (1024 * 1024)}MB` });
@@ -176,7 +313,7 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
 
   const uploadFile = async (file: File): Promise<{ url: string; name: string }> => {
     const storage = getStorage();
-    const fileRef = ref(storage, `diary/daily/${schoolId}/${Date.now()}_${file.name}`);
+    const fileRef = ref(storage, `diary/${entryType}/${schoolId}/${Date.now()}_${file.name}`);
     
     setUploading(true);
     setUploadProgress(0);
@@ -199,21 +336,82 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
     setSelectedFile(null);
   };
 
+  const addTag = () => {
+    if (newTag.trim() && !remarkData.tags.includes(newTag.trim()) && remarkData.tags.length < 10) {
+      setRemarkData(prev => ({
+        ...prev,
+        tags: [...prev.tags, newTag.trim()]
+      }));
+      setNewTag("");
+    }
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    setRemarkData(prev => ({
+      ...prev,
+      tags: prev.tags.filter((tag: string) => tag !== tagToRemove)
+    }));
+  };
+
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
-    if (!formData.classId) {
+    if (!commonData.classId) {
       newErrors.classId = "Class is required";
     }
 
-    if (!formData.subjectId) {
+    if (!commonData.subjectId) {
       newErrors.subjectId = "Subject is required";
     }
 
-    if (!formData.content.trim()) {
-      newErrors.content = "Daily notes content is required";
-    } else if (formData.content.length < 10 || formData.content.length > 2000) {
-      newErrors.content = "Content must be between 10 and 2000 characters";
+    if (entryType === "homework") {
+      if (!homeworkData.title.trim()) {
+        newErrors.title = "Title is required";
+      } else if (homeworkData.title.length < 3 || homeworkData.title.length > 100) {
+        newErrors.title = "Title must be between 3 and 100 characters";
+      }
+
+      if (!homeworkData.description.trim()) {
+        newErrors.description = "Description is required";
+      } else if (homeworkData.description.length < 10 || homeworkData.description.length > 500) {
+        newErrors.description = "Description must be between 10 and 500 characters";
+      }
+
+      if (!homeworkData.workToDo.trim()) {
+        newErrors.workToDo = "Work to do is required";
+      } else if (homeworkData.workToDo.length < 10 || homeworkData.workToDo.length > 1000) {
+        newErrors.workToDo = "Work to do must be between 10 and 1000 characters";
+      }
+
+      if (!homeworkData.dueDate) {
+        newErrors.dueDate = "Due date is required";
+      } else if (new Date(homeworkData.dueDate) <= new Date()) {
+        newErrors.dueDate = "Due date must be in the future";
+      }
+    }
+
+    if (entryType === "remark") {
+      if (!remarkData.studentId) {
+        newErrors.studentId = "Student is required";
+      }
+
+      if (!remarkData.personalRemarks.trim()) {
+        newErrors.personalRemarks = "Personal remarks is required";
+      } else if (remarkData.personalRemarks.length < 10 || remarkData.personalRemarks.length > 500) {
+        newErrors.personalRemarks = "Personal remarks must be between 10 and 500 characters";
+      }
+
+      if (remarkData.workRemarks && remarkData.workRemarks.length > 500) {
+        newErrors.workRemarks = "Work remarks must be less than 500 characters";
+      }
+
+      if (remarkData.parentRemarks && remarkData.parentRemarks.length > 500) {
+        newErrors.parentRemarks = "Parent remarks must be less than 500 characters";
+      }
+
+      if (remarkData.followUpRequired && !remarkData.followUpDate) {
+        newErrors.followUpDate = "Follow-up date is required when follow-up is needed";
+      }
     }
 
     if (!schoolId) {
@@ -239,12 +437,12 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
         attachmentName = uploadResult.name;
       }
 
-      const entryData = {
-        classId: doc(db, "classes", formData.classId),
-        subjectId: doc(db, "subjects", formData.subjectId),
+      const baseData = {
+        type: entryType,
+        classId: doc(db, "classes", commonData.classId),
+        subjectId: doc(db, "subjects", commonData.subjectId),
         schoolId: doc(db, "school", schoolId!),
         createdBy: doc(db, "users", user!.uid),
-        content: formData.content.trim(),
         attachments: attachmentUrl ? [{
           name: attachmentName,
           url: attachmentUrl,
@@ -257,10 +455,49 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
         ),
       };
 
-      if (entryId) {
-        await updateDoc(doc(db, "diary_entries", entryId), entryData);
+      let entryData;
+      let collectionName;
+
+      if (entryType === "homework") {
+        entryData = {
+          ...baseData,
+          title: homeworkData.title.trim(),
+          description: homeworkData.description.trim(),
+          workToDo: homeworkData.workToDo.trim(),
+          dueDate: new Date(homeworkData.dueDate),
+          priority: homeworkData.priority,
+          status: "active",
+          metadata: {
+            estimatedTime: homeworkData.estimatedTime,
+            difficulty: homeworkData.difficulty,
+            isAssignment: true
+          }
+        };
+        collectionName = "homeworks";
       } else {
-        await addDoc(collection(db, "diary_entries"), entryData);
+        entryData = {
+          ...baseData,
+          studentId: doc(db, "users", remarkData.studentId),
+          personalRemarks: remarkData.personalRemarks.trim(),
+          workRemarks: remarkData.workRemarks.trim(),
+          parentRemarks: remarkData.parentRemarks.trim(),
+          priority: remarkData.priority,
+          category: remarkData.category,
+          tags: remarkData.tags,
+          isPrivate: remarkData.isPrivate,
+          visibleToParents: remarkData.visibleToParents,
+          visibleToStudent: remarkData.visibleToStudent,
+          followUpRequired: remarkData.followUpRequired,
+          followUpDate: remarkData.followUpDate ? new Date(remarkData.followUpDate) : null,
+          status: "active"
+        };
+        collectionName = "remarks";
+      }
+
+      if (entryId) {
+        await updateDoc(doc(db, collectionName, entryId), entryData);
+      } else {
+        await addDoc(collection(db, collectionName), entryData);
       }
 
       onSuccess?.();
@@ -271,6 +508,435 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
       setLoading(false);
     }
   };
+
+  const renderHomeworkForm = () => (
+    <div className="space-y-8">
+      {/* Basic Information */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 form-section">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+            <FontAwesomeIcon icon={faBookOpen} className="text-blue-600 text-sm" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900">Homework Details</h3>
+        </div>
+        
+        <div className="space-y-6">
+          <Input
+            label="Title"
+            type="text"
+            value={homeworkData.title}
+            onChange={(value) => setHomeworkData(prev => ({ ...prev, title: value }))}
+            placeholder="e.g., Mathematics Problem Set Chapter 5"
+            required
+            error={errors.title}
+          />
+
+          <Input
+            label="Description"
+            type="textarea"
+            value={homeworkData.description}
+            onChange={(value) => setHomeworkData(prev => ({ ...prev, description: value }))}
+            placeholder="Brief description of the homework assignment..."
+            rows={3}
+            required
+            error={errors.description}
+          />
+
+          <Input
+            label="Work to Do"
+            type="textarea"
+            value={homeworkData.workToDo}
+            onChange={(value) => setHomeworkData(prev => ({ ...prev, workToDo: value }))}
+            placeholder="Detailed instructions for students on what work needs to be completed..."
+            rows={4}
+            required
+            error={errors.workToDo}
+          />
+        </div>
+      </div>
+
+      {/* Class & Subject */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 form-section">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+            <FontAwesomeIcon icon={faUsers} className="text-green-600 text-sm" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900">Class & Subject</h3>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Select
+            label="Class"
+            options={classes}
+            value={commonData.classId}
+            onChange={(value) => setCommonData(prev => ({ ...prev, classId: value }))}
+            placeholder="Select a class"
+            required
+            disabled={loadingData}
+            error={errors.classId}
+          />
+
+          <Select
+            label="Subject"
+            options={subjects}
+            value={commonData.subjectId}
+            onChange={(value) => setCommonData(prev => ({ ...prev, subjectId: value }))}
+            placeholder="Select a subject"
+            required
+            disabled={!commonData.classId}
+            error={errors.subjectId}
+          />
+        </div>
+      </div>
+
+      {/* Schedule & Priority */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 form-section">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+            <FontAwesomeIcon icon={faCalendarAlt} className="text-orange-600 text-sm" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900">Schedule & Priority</h3>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Input
+            label="Due Date"
+            type="date"
+            value={homeworkData.dueDate}
+            onChange={(value) => setHomeworkData(prev => ({ ...prev, dueDate: value }))}
+            required
+            error={errors.dueDate}
+          />
+
+          <Select
+            label="Priority"
+            options={Object.values(PRIORITY_LEVELS).map(level => ({
+              value: level.value,
+              label: level.label
+            }))}
+            value={homeworkData.priority}
+            onChange={(value) => setHomeworkData(prev => ({ ...prev, priority: value }))}
+            required
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+          <Input
+            label="Estimated Time"
+            type="text"
+            value={homeworkData.estimatedTime}
+            onChange={(value) => setHomeworkData(prev => ({ ...prev, estimatedTime: value }))}
+            placeholder="e.g., 45 minutes"
+          />
+
+          <Select
+            label="Difficulty"
+            options={[
+              { value: "easy", label: "Easy" },
+              { value: "medium", label: "Medium" },
+              { value: "hard", label: "Hard" }
+            ]}
+            value={homeworkData.difficulty}
+            onChange={(value) => setHomeworkData(prev => ({ ...prev, difficulty: value }))}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderRemarkForm = () => (
+    <div className="space-y-8">
+      {/* Student Selection */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 form-section">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+            <FontAwesomeIcon icon={faUserGraduate} className="text-purple-600 text-sm" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900">Student & Class</h3>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Select
+            label="Class"
+            options={classes}
+            value={commonData.classId}
+            onChange={(value) => setCommonData(prev => ({ ...prev, classId: value }))}
+            placeholder="Select a class"
+            required
+            disabled={loadingData}
+            error={errors.classId}
+          />
+
+          <Select
+            label="Student"
+            options={students}
+            value={remarkData.studentId}
+            onChange={(value) => setRemarkData(prev => ({ ...prev, studentId: value }))}
+            placeholder="Select a student"
+            required
+            disabled={!commonData.classId}
+            error={errors.studentId}
+          />
+
+          <Select
+            label="Subject"
+            options={[{ value: "", label: "All Subjects" }, ...subjects]}
+            value={commonData.subjectId}
+            onChange={(value) => setCommonData(prev => ({ ...prev, subjectId: value }))}
+            placeholder="Select subject (optional)"
+            disabled={!commonData.classId}
+            error={errors.subjectId}
+          />
+        </div>
+      </div>
+
+      {/* Remarks */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 form-section">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+            <FontAwesomeIcon icon={faComments} className="text-indigo-600 text-sm" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900">Remarks</h3>
+        </div>
+        
+        <div className="space-y-6">
+          <Input
+            label="Personal Remarks"
+            type="textarea"
+            value={remarkData.personalRemarks}
+            onChange={(value) => setRemarkData(prev => ({ ...prev, personalRemarks: value }))}
+            placeholder="Personal observations about the student's performance, behavior, or progress..."
+            rows={3}
+            required
+            error={errors.personalRemarks}
+          />
+
+          <Input
+            label="Work Remarks"
+            type="textarea"
+            value={remarkData.workRemarks}
+            onChange={(value) => setRemarkData(prev => ({ ...prev, workRemarks: value }))}
+            placeholder="Comments about the student's work quality, completion, or improvement areas..."
+            rows={3}
+            error={errors.workRemarks}
+          />
+
+          <Input
+            label="Parent Remarks"
+            type="textarea"
+            value={remarkData.parentRemarks}
+            onChange={(value) => setRemarkData(prev => ({ ...prev, parentRemarks: value }))}
+            placeholder="Specific message or recommendations for parents..."
+            rows={3}
+            error={errors.parentRemarks}
+          />
+        </div>
+      </div>
+
+      {/* Priority & Category */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 form-section">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
+            <FontAwesomeIcon icon={faTags} className="text-amber-600 text-sm" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900">Priority & Category</h3>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Priority Level</label>
+            <div className="space-y-2">
+              {Object.values(PRIORITY_LEVELS).map((level) => (
+                <div key={level.value} className="flex items-center">
+                  <input
+                    type="radio"
+                    id={`priority-${level.value}`}
+                    name="priority"
+                    value={level.value}
+                    checked={remarkData.priority === level.value}
+                    onChange={(e) => setRemarkData(prev => ({ ...prev, priority: e.target.value }))}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                  />
+                  <label
+                    htmlFor={`priority-${level.value}`}
+                    className="ml-3 flex items-center gap-2 text-sm"
+                  >
+                    <span
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: level.color }}
+                    ></span>
+                    <span className="font-medium">{level.label}</span>
+                    <span className="text-gray-500">- {level.description}</span>
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+            <div className="space-y-2">
+              {Object.values(REMARK_CATEGORIES).map((category) => (
+                <div key={category.value} className="flex items-center">
+                  <input
+                    type="radio"
+                    id={`category-${category.value}`}
+                    name="category"
+                    value={category.value}
+                    checked={remarkData.category === category.value}
+                    onChange={(e) => setRemarkData(prev => ({ ...prev, category: e.target.value }))}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                  />
+                  <label
+                    htmlFor={`category-${category.value}`}
+                    className="ml-3 flex items-center gap-2 text-sm"
+                  >
+                    <FontAwesomeIcon 
+                      icon={category.icon} 
+                      className="text-sm"
+                      style={{ color: category.color }}
+                    />
+                    <span className="font-medium">{category.label}</span>
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tags */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 form-section">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-8 h-8 bg-pink-100 rounded-lg flex items-center justify-center">
+            <FontAwesomeIcon icon={faTags} className="text-pink-600 text-sm" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900">Tags</h3>
+        </div>
+        
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newTag}
+              onChange={(e) => setNewTag(e.target.value)}
+              placeholder="Add a tag..."
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
+            />
+            <button
+              type="button"
+              onClick={addTag}
+              disabled={!newTag.trim() || remarkData.tags.includes(newTag.trim()) || remarkData.tags.length >= 10}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <FontAwesomeIcon icon={faPlus} />
+              Add
+            </button>
+          </div>
+
+                     {remarkData.tags.length > 0 && (
+             <div className="flex flex-wrap gap-2">
+               {remarkData.tags.map((tag: string, index: number) => (
+                 <span
+                   key={index}
+                   className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center gap-2"
+                 >
+                   {tag}
+                   <button
+                     type="button"
+                     onClick={() => removeTag(tag)}
+                     className="text-blue-600 hover:text-blue-800"
+                   >
+                     <FontAwesomeIcon icon={faMinus} className="text-xs" />
+                   </button>
+                 </span>
+               ))}
+             </div>
+           )}
+        </div>
+      </div>
+
+      {/* Visibility & Follow-up */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 form-section">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center">
+            <FontAwesomeIcon icon={faEye} className="text-teal-600 text-sm" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900">Visibility & Follow-up</h3>
+        </div>
+        
+        <div className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-4">Visibility Settings</label>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <FontAwesomeIcon icon={remarkData.isPrivate ? faEyeSlash : faEye} className="text-gray-600" />
+                  <span className="text-sm font-medium">Private Remark</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={remarkData.isPrivate}
+                  onChange={(e) => setRemarkData(prev => ({ ...prev, isPrivate: e.target.checked }))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <FontAwesomeIcon icon={faHome} className="text-gray-600" />
+                  <span className="text-sm font-medium">Visible to Parents</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={remarkData.visibleToParents}
+                  onChange={(e) => setRemarkData(prev => ({ ...prev, visibleToParents: e.target.checked }))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <FontAwesomeIcon icon={faUserGraduate} className="text-gray-600" />
+                  <span className="text-sm font-medium">Visible to Student</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={remarkData.visibleToStudent}
+                  onChange={(e) => setRemarkData(prev => ({ ...prev, visibleToStudent: e.target.checked }))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <label className="block text-sm font-medium text-gray-700">Follow-up Required</label>
+              <input
+                type="checkbox"
+                checked={remarkData.followUpRequired}
+                onChange={(e) => setRemarkData(prev => ({ ...prev, followUpRequired: e.target.checked }))}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+            </div>
+
+            {remarkData.followUpRequired && (
+              <Input
+                label="Follow-up Date"
+                type="date"
+                value={remarkData.followUpDate}
+                onChange={(value) => setRemarkData(prev => ({ ...prev, followUpDate: value }))}
+                required={remarkData.followUpRequired}
+                error={errors.followUpDate}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   // Show loading spinner while authentication is in progress
   if (authLoading) {
@@ -300,18 +966,18 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
   return (
     <div className="h-full overflow-hidden">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-t-xl">
+      <div className="bg-gradient-to-r from-purple-600 to-purple-700 text-white p-6 rounded-t-xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-              <FontAwesomeIcon icon={faCalendarDay} className="text-xl" />
+              <FontAwesomeIcon icon={faClipboard} className="text-xl" />
             </div>
             <div>
               <h2 className="text-2xl font-bold">
-                {entryId ? "Edit Daily Notes" : "Create Daily Notes"}
+                {entryId ? "Edit Diary Entry" : "Create New Diary Entry"}
               </h2>
-              <p className="text-blue-100 text-sm">
-                {entryId ? "Update your daily notes" : "Record your daily teaching notes and observations"}
+              <p className="text-purple-100 text-sm">
+                {entryId ? "Update diary entry details" : "Choose between homework or remarks"}
               </p>
             </div>
           </div>
@@ -324,69 +990,44 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
             </button>
           )}
         </div>
+
+        {/* Type Selection */}
+        <div className="mt-6 flex gap-4">
+          <button
+            type="button"
+            onClick={() => setEntryType("homework")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+              entryType === "homework"
+                ? "bg-white text-purple-600 shadow-lg"
+                : "bg-white/10 text-white hover:bg-white/20"
+            }`}
+          >
+            <FontAwesomeIcon icon={faBookOpen} />
+            Home Work
+          </button>
+          <button
+            type="button"
+            onClick={() => setEntryType("remark")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+              entryType === "remark"
+                ? "bg-white text-purple-600 shadow-lg"
+                : "bg-white/10 text-white hover:bg-white/20"
+            }`}
+          >
+            <FontAwesomeIcon icon={faComments} />
+            Remarks
+          </button>
+        </div>
       </div>
 
       {/* Scrollable Content */}
       <div className="h-[calc(100vh-200px)] overflow-y-auto custom-scrollbar">
         <div className="p-6">
           <form onSubmit={handleSubmit}>
-            {/* Class & Subject */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                  <FontAwesomeIcon icon={faUsers} className="text-green-600 text-sm" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900">Class & Subject</h3>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Select
-                  label="Class"
-                  options={classes}
-                  value={formData.classId}
-                  onChange={(value) => setFormData(prev => ({ ...prev, classId: value }))}
-                  placeholder="Select a class"
-                  required
-                  disabled={loadingData}
-                  error={errors.classId}
-                />
-
-                <Select
-                  label="Subject"
-                  options={subjects}
-                  value={formData.subjectId}
-                  onChange={(value) => setFormData(prev => ({ ...prev, subjectId: value }))}
-                  placeholder="Select a subject"
-                  required
-                  disabled={!formData.classId}
-                  error={errors.subjectId}
-                />
-              </div>
-            </div>
-
-            {/* Daily Notes Content */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <FontAwesomeIcon icon={faClipboard} className="text-blue-600 text-sm" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900">Daily Notes</h3>
-              </div>
-              
-              <Input
-                label="Today's Notes"
-                type="textarea"
-                value={formData.content}
-                onChange={(value) => setFormData(prev => ({ ...prev, content: value }))}
-                placeholder="Record your daily teaching notes, observations, student progress, activities completed, or any important notes for today..."
-                rows={8}
-                required
-                error={errors.content}
-              />
-            </div>
+            {entryType === "homework" ? renderHomeworkForm() : renderRemarkForm()}
 
             {/* File Upload Section */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 form-section">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
                   <FontAwesomeIcon icon={faFileAlt} className="text-indigo-600 text-sm" />
@@ -407,7 +1048,7 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
                   <div className={`border-2 border-dashed rounded-xl p-8 text-center transition-all duration-200 file-upload-area ${
                     selectedFile 
                       ? "border-green-300 bg-green-50" 
-                      : "border-gray-300 bg-gray-50 hover:border-blue-400 hover:bg-blue-50"
+                      : "border-gray-300 bg-gray-50 hover:border-purple-400 hover:bg-purple-50"
                   }`}>
                     {selectedFile ? (
                       <div className="flex items-center justify-center gap-4">
@@ -431,12 +1072,13 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
                       </div>
                     ) : (
                       <div>
-                        <div className="w-16 h-16 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-                          <FontAwesomeIcon icon={faCloudUpload} className="text-blue-600 text-2xl" />
+                        <div className="w-16 h-16 bg-purple-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+                          <FontAwesomeIcon icon={faCloudUpload} className="text-purple-600 text-2xl" />
                         </div>
                         <p className="text-gray-700 font-medium mb-2">Click to upload or drag and drop</p>
                         <p className="text-sm text-gray-500">
-                          PDF, Word, Text, or Image files (max 5MB)
+                          PDF, Word, Text, or Image files 
+                          (max {entryType === "homework" ? "10MB" : "5MB"})
                         </p>
                       </div>
                     )}
@@ -444,17 +1086,17 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
                 </div>
 
                 {uploading && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        <FontAwesomeIcon icon={faSpinner} className="text-blue-600 animate-spin" />
-                        <span className="text-sm font-medium text-blue-900">Uploading...</span>
+                        <FontAwesomeIcon icon={faSpinner} className="text-purple-600 animate-spin" />
+                        <span className="text-sm font-medium text-purple-900">Uploading...</span>
                       </div>
-                      <span className="text-sm text-blue-700 font-medium">{uploadProgress}%</span>
+                      <span className="text-sm text-purple-700 font-medium">{uploadProgress}%</span>
                     </div>
-                    <div className="w-full bg-blue-200 rounded-full h-2">
+                    <div className="w-full bg-purple-200 rounded-full h-2">
                       <div 
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300 progress-bar"
+                        className="bg-purple-600 h-2 rounded-full transition-all duration-300 progress-bar"
                         style={{ width: `${uploadProgress}%` }}
                       ></div>
                     </div>
@@ -471,7 +1113,7 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
             </div>
 
             {/* Data Loading Errors */}
-            {(errors.classes || errors.subjects) && (
+            {(errors.classes || errors.subjects || errors.students) && (
               <div className="space-y-2">
                 {errors.classes && (
                   <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 p-3 rounded-lg border border-red-200">
@@ -483,6 +1125,12 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
                   <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 p-3 rounded-lg border border-red-200">
                     <FontAwesomeIcon icon={faExclamationTriangle} />
                     <span>{errors.subjects}</span>
+                  </div>
+                )}
+                {errors.students && (
+                  <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 p-3 rounded-lg border border-red-200">
+                    <FontAwesomeIcon icon={faExclamationTriangle} />
+                    <span>{errors.students}</span>
                   </div>
                 )}
               </div>
@@ -506,7 +1154,7 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
             type="submit"
             onClick={handleSubmit}
             disabled={loading || loadingData || uploading}
-            className={`flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed btn-loading ${
+            className={`flex-1 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white px-6 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed btn-loading ${
               loading || uploading ? "animate-pulse" : ""
             }`}
           >
@@ -515,7 +1163,7 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
             ) : (
               <FontAwesomeIcon icon={faCheck} />
             )}
-            {loading || uploading ? "Processing..." : (entryId ? "Update Notes" : "Save Daily Notes")}
+            {loading || uploading ? "Processing..." : (entryId ? "Update Entry" : `Create ${entryType === "homework" ? "Homework" : "Remark"}`)}
           </button>
           
           {onCancel && (
