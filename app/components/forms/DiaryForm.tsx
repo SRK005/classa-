@@ -330,18 +330,19 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
       newErrors.classId = "Class is required";
     }
 
-    if (!commonData.subjectId) {
+    // Subject is only required for homework, optional for remarks
+    if (entryType === "homework" && !commonData.subjectId) {
       newErrors.subjectId = "Subject is required";
     }
 
     if (entryType === "homework") {
-      if (!homeworkData.title.trim()) {
+      if (!homeworkData.title?.trim()) {
         newErrors.title = "Title is required";
       } else if (homeworkData.title.length < 3 || homeworkData.title.length > 100) {
         newErrors.title = "Title must be between 3 and 100 characters";
       }
 
-      if (!homeworkData.description.trim()) {
+      if (!homeworkData.description?.trim()) {
         newErrors.description = "Description is required";
       } else if (homeworkData.description.length < 10 || homeworkData.description.length > 500) {
         newErrors.description = "Description must be between 10 and 500 characters";
@@ -353,7 +354,7 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
         newErrors.studentId = "Student is required";
       }
 
-      if (!remarkData.personalRemarks.trim()) {
+      if (!remarkData.personalRemarks?.trim()) {
         newErrors.personalRemarks = "Personal remarks is required";
       } else if (remarkData.personalRemarks.length < 10 || remarkData.personalRemarks.length > 500) {
         newErrors.personalRemarks = "Personal remarks must be between 10 and 500 characters";
@@ -391,10 +392,9 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
         attachmentName = uploadResult.name;
       }
 
-      const baseData = {
+      const baseData: any = {
         type: entryType,
         classId: doc(db, "classes", commonData.classId),
-        subjectId: doc(db, "subjects", commonData.subjectId),
         schoolId: doc(db, "school", schoolId!),
         createdBy: doc(db, "users", user!.uid),
         attachments: attachmentUrl ? [{
@@ -408,6 +408,11 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
           : { createdAt: serverTimestamp() }
         ),
       };
+
+      // Add subjectId only if it exists (required for homework, optional for remarks)
+      if (commonData.subjectId) {
+        baseData.subjectId = doc(db, "subjects", commonData.subjectId);
+      }
 
       let entryData;
       let collectionName;
@@ -582,7 +587,7 @@ export default function DiaryForm({ entryId, initialData, onSuccess, onCancel }:
           />
 
           <Select
-            label="Subject"
+            label="Subject (Optional)"
             options={[{ value: "", label: "All Subjects" }, ...subjects]}
             value={commonData.subjectId}
             onChange={(value) => setCommonData(prev => ({ ...prev, subjectId: value }))}
