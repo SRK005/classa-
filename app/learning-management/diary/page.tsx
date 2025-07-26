@@ -250,18 +250,18 @@ export default function DiaryManagementPage() {
   const filteredEntries = diaryEntries.filter(entry => {
     const matchesSearch = (
       (entry.type === "homework" && (
-        entry.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.workToDo.toLowerCase().includes(searchTerm.toLowerCase())
+        (entry.title?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+        (entry.description?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+        (entry.workToDo?.toLowerCase() || "").includes(searchTerm.toLowerCase())
       )) ||
       (entry.type === "remark" && (
-        entry.personalRemarks.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (entry.workRemarks && entry.workRemarks.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (entry.parentRemarks && entry.parentRemarks.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (entry.studentName && entry.studentName.toLowerCase().includes(searchTerm.toLowerCase()))
+        (entry.personalRemarks?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+        (entry.workRemarks?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+        (entry.parentRemarks?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+        (entry.studentName?.toLowerCase() || "").includes(searchTerm.toLowerCase())
       ))
-    ) || entry.className.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      entry.subjectName.toLowerCase().includes(searchTerm.toLowerCase());
+    ) || (entry.className?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+      (entry.subjectName?.toLowerCase() || "").includes(searchTerm.toLowerCase());
 
     const matchesType = filterType === "all" || entry.type === filterType;
     const matchesPriority = filterPriority === "all" || entry.priority === filterPriority;
