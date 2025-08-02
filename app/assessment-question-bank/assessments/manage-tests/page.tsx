@@ -16,8 +16,9 @@ import {
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebaseClient";
-import SelectQuestionsDialog from "../../components/SelectQuestionsDialog";
+import QuestionSelectionDialog from "../../components/QuestionSelectionDialog";
 import PDFDownloadButton from "../../pyq/neet/PDFDownloadButton";
+import TestPreviewDialog from "../../components/TestPreviewDialog";
 import latexToPngDataUrl from "../../pyq/neet/latexToDataUrl";
 import { Dialog } from "@headlessui/react";
 
@@ -70,6 +71,8 @@ export default function ManageTestsPage() {
   const [preparePdfTest, setPreparePdfTest] = React.useState<any | null>(null);
   const [pdfQuestions, setPdfQuestions] = React.useState<any[]>([]);
   const [pdfLoading, setPdfLoading] = React.useState(false);
+  const [previewDialogOpen, setPreviewDialogOpen] = React.useState<string | null>(null);
+  const [previewQuestions, setPreviewQuestions] = React.useState<any[]>([]);
 
   // Fetch current user's schoolID
   React.useEffect(() => {
@@ -151,6 +154,42 @@ export default function ManageTestsPage() {
     }
   };
 
+  // Function to refresh a specific test's data
+  const refreshTestData = async (testId: string) => {
+    try {
+      const testDoc = await getDoc(doc(db, "test", testId));
+      if (testDoc.exists()) {
+        const data = testDoc.data();
+        // Fetch class name
+        let className = "-";
+        if (data.classId) {
+          try {
+            const classSnap = await getDoc(data.classId as DocumentReference);
+            className = classSnap.exists() ? classSnap.data().name : "-";
+          } catch {}
+        }
+        
+        const updatedTest = {
+          id: testDoc.id,
+          name: data.name,
+          className,
+          start: data.start?.toDate ? data.start.toDate() : data.start,
+          end: data.end?.toDate ? data.end.toDate() : data.end,
+          status: (data.status || "drafted") as keyof typeof pastelStatus,
+          online: data.online,
+          questions: Array.isArray(data.questions) ? data.questions : [],
+          totalQuestions: typeof data.totalQuestions === "number" ? data.totalQuestions : null,
+        };
+        
+        setTests((prev) =>
+          prev.map((t) => (t.id === testId ? updatedTest : t))
+        );
+      }
+    } catch (err) {
+      console.error("Error refreshing test data:", err);
+    }
+  };
+
   const handlePublish = async (id: string) => {
     setActionLoading(id);
     try {
@@ -164,6 +203,40 @@ export default function ManageTestsPage() {
       alert("Failed to publish test.");
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  // Handler to preview test questions
+  const handlePreviewQuestions = async (test: any) => {
+    setPreviewDialogOpen(test.id);
+    try {
+      // Fetch question data from test
+      let questionsData = [];
+      if (test.questions && test.questions.length > 0) {
+        questionsData = await Promise.all(
+          test.questions.map(async (qRef: any) => {
+            const qSnap = await getDoc(qRef);
+            const d = (qSnap.data() as any) || {};
+            return {
+              id: qSnap.id,
+              question: d.questionText || d.question || "",
+              optionA: d.optionA || "",
+              optionB: d.optionB || "",
+              optionC: d.optionC || "",
+              optionD: d.optionD || "",
+              correct: d.correct || "",
+              explanation: d.explanation || "",
+              solution: d.solution || "",
+              difficulty: d.difficulty || "",
+              bloom: d.bloom || "",
+            };
+          })
+        );
+      }
+      setPreviewQuestions(questionsData);
+    } catch (err) {
+      console.error("Error fetching questions for preview:", err);
+      setPreviewQuestions([]);
     }
   };
 
@@ -369,13 +442,24 @@ export default function ManageTestsPage() {
                       </div>
                     </div>
                     <div className="flex flex-col gap-2 mt-2 items-center">
-                      {/* First row: First two buttons */}
+                      {/* First row: Three buttons */}
                       <div className="flex flex-wrap gap-3 w-full justify-start">
                         <button
                           className="px-4 py-2 rounded-xl font-semibold shadow-sm border border-blue-200 bg-white text-blue-700 hover:bg-blue-50 focus:ring-2 focus:ring-blue-200 transition"
                           onClick={() => setSelectDialogOpen(test.id)}
                         >
                           Select Questions
+                        </button>
+                        <button
+                          className="px-4 py-2 rounded-xl font-semibold shadow-sm border border-green-200 bg-white text-green-700 hover:bg-green-50 focus:ring-2 focus:ring-green-200 transition flex items-center gap-2"
+                          onClick={() => handlePreviewQuestions(test)}
+                          disabled={!test.questions || test.questions.length === 0}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                          Preview
                         </button>
                         <button
                           className="px-4 py-2 rounded-xl font-semibold shadow-sm border border-purple-200 bg-white text-purple-700 hover:bg-purple-50 focus:ring-2 focus:ring-purple-200 transition"
@@ -414,26 +498,39 @@ export default function ManageTestsPage() {
                         </button>
                       </div>
                     </div>
-                    {/* SelectQuestionsDialog for this test */}
+                    {/* QuestionSelectionDialog for this test */}
                     {selectDialogOpen === test.id && (
-                      <SelectQuestionsDialog
+                      <QuestionSelectionDialog
                         open={true}
                         onClose={() => setSelectDialogOpen(null)}
-                        onUpdate={(selected) => {
+                        onUpdate={async (selected: string[]) => {
                           setSelectedQuestions((prev) => ({
                             ...prev,
                             [test.id]: selected,
                           }));
                           setSelectDialogOpen(null);
-                          // Optionally, update Firestore here
+                          // Refresh the test data to show updated question count
+                          await refreshTestData(test.id);
                         }}
                         initialSelected={selectedQuestions[test.id] || []}
                         schoolId={userSchoolId}
                         testId={doc(db, "test", test.id)}
+                        onRefreshTest={() => refreshTestData(test.id)}
                       />
                     )}
                   </div>
                 )
+              )}
+
+              {/* Test Preview Dialog */}
+              {previewDialogOpen && (
+                <TestPreviewDialog
+                  open={true}
+                  onClose={() => setPreviewDialogOpen(null)}
+                  questions={previewQuestions}
+                  testId={previewDialogOpen}
+                  onRefreshTest={() => refreshTestData(previewDialogOpen)}
+                />
               )}
               {tests.length === 0 && (
                 <div className="col-span-full text-center text-blue-400 py-10">

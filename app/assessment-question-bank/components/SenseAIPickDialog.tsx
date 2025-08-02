@@ -28,6 +28,7 @@ interface SenseAIPickDialogProps {
   onSenseAIPick: (selected: string[]) => void;
   classId?: string;
   testId?: DocumentReference;
+  onRefreshTest?: () => Promise<void>;
 }
 
 const difficulties = ['easy', 'medium', 'hard'];
@@ -40,7 +41,7 @@ const bloomFields = [
   'Create',
 ];
 
-const SenseAIPickDialog: React.FC<SenseAIPickDialogProps> = ({ open, onClose, onSenseAIPick, classId, testId }) => {
+const SenseAIPickDialog: React.FC<SenseAIPickDialogProps> = ({ open, onClose, onSenseAIPick, classId, testId, onRefreshTest }) => {
   const [easy, setEasy] = useState(0);
   const [medium, setMedium] = useState(0);
   const [hard, setHard] = useState(0);
@@ -304,6 +305,7 @@ const SenseAIPickDialog: React.FC<SenseAIPickDialogProps> = ({ open, onClose, on
         onClose={() => setResultsOpen(false)}
         questions={resultsQuestions}
         testId={testId}
+        onRefreshTest={onRefreshTest}
       />
     </div>
   );

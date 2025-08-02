@@ -24,7 +24,12 @@ import {
   faCalendarCheck,
   faChartLine,
   faBook,
-  faUsers
+  faUsers,
+  faFilter,
+  faSort,
+  faTimes,
+  faChevronDown,
+  faEllipsisVertical
 } from "@fortawesome/free-solid-svg-icons";
 
 interface HomeworkEntry {
@@ -76,9 +81,24 @@ type DiaryEntryWithDetails = DiaryEntry & {
 };
 
 const PRIORITY_COLORS = {
-  high: { color: "#ef4444", bgColor: "#fef2f2" },
-  medium: { color: "#f59e0b", bgColor: "#fffbeb" },
-  low: { color: "#10b981", bgColor: "#f0fdf4" }
+  high: { 
+    primary: "#D32F2F", 
+    container: "#FFEBEE", 
+    onContainer: "#B71C1C",
+    surface: "#FCE4EC"
+  },
+  medium: { 
+    primary: "#F57C00", 
+    container: "#FFF3E0", 
+    onContainer: "#E65100",
+    surface: "#FFF8E1"
+  },
+  low: { 
+    primary: "#388E3C", 
+    container: "#E8F5E8", 
+    onContainer: "#1B5E20",
+    surface: "#F1F8E9"
+  }
 };
 
 const CATEGORY_ICONS = {
@@ -98,6 +118,9 @@ export default function DiaryManagementPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<"all" | "homework" | "remark">("all");
   const [filterPriority, setFilterPriority] = useState<"all" | "high" | "medium" | "low">("all");
+  const [showFilters, setShowFilters] = useState(false);
+  const [selectedEntry, setSelectedEntry] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   useEffect(() => {
     if (!authLoading) {
@@ -283,10 +306,12 @@ export default function DiaryManagementPage() {
   // Show loading while auth is loading
   if (authLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-indigo-50 via-white to-cyan-50">
         <div className="text-center">
-          <LoadingSpinner size="large" />
-          <p className="mt-4 text-gray-600">Loading authentication...</p>
+          <div className="animate-pulse">
+            <div className="w-16 h-16 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full mx-auto mb-4 animate-spin"></div>
+          </div>
+          <p className="text-gray-600 font-medium">Loading authentication...</p>
         </div>
       </div>
     );
@@ -295,19 +320,21 @@ export default function DiaryManagementPage() {
   // Show error if no school ID
   if (!schoolId) {
     return (
-      <div className="flex min-h-screen bg-gray-50">
+      <div className="flex min-h-screen bg-gradient-to-br from-red-50 via-white to-pink-50">
         <LearningManagementSidebar />
         <main className="flex-1 p-8">
           <div className="max-w-4xl mx-auto">
-            <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-              <FontAwesomeIcon icon={faExclamationTriangle} className="text-red-500 text-4xl mb-4" />
-              <h2 className="text-xl font-semibold text-red-800 mb-2">Access Denied</h2>
-              <p className="text-red-600 mb-4">
+            <div className="bg-white border border-red-200 rounded-3xl p-8 text-center shadow-lg backdrop-blur-sm">
+              <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <FontAwesomeIcon icon={faExclamationTriangle} className="text-red-500 text-2xl" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-3">Access Denied</h2>
+              <p className="text-gray-600 mb-6 max-w-md mx-auto">
                 You don't have permission to access this page. Please ensure you're logged in as a school administrator.
               </p>
               <button
                 onClick={() => window.location.href = "/login"}
-                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+                className="bg-red-500 hover:bg-red-600 text-white px-8 py-3 rounded-full font-medium transition-all duration-200 hover:shadow-lg transform hover:scale-105"
               >
                 Go to Login
               </button>
@@ -319,95 +346,128 @@ export default function DiaryManagementPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gradient-to-br from-indigo-50 via-white to-cyan-50">
       <LearningManagementSidebar />
       
-      <main className="flex-1 p-8">
+      <main className="flex-1 p-6 lg:p-8">
         <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="flex justify-between items-center mb-8">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Diary Management</h1>
-              <p className="text-gray-600">Manage homework assignments and student remarks</p>
+          {/* Enhanced Header */}
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
+                <FontAwesomeIcon icon={faClipboard} className="text-white text-xl" />
+              </div>
+              <div>
+                <h1 className="text-3xl lg:text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent mb-2">
+                  Diary Management
+                </h1>
+                <p className="text-gray-600 text-lg">Manage homework assignments and student remarks</p>
+              </div>
             </div>
             <button
               onClick={() => setShowForm(true)}
-              className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white px-6 py-3 rounded-xl font-medium flex items-center gap-2 transition-all duration-200 shadow-lg hover:shadow-xl"
+              className="group bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-8 py-4 rounded-2xl font-medium flex items-center gap-3 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 relative overflow-hidden"
             >
-              <FontAwesomeIcon icon={faPlus} />
-              Add Entry
+              <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              <FontAwesomeIcon icon={faPlus} className="text-lg group-hover:rotate-90 transition-transform duration-300" />
+              <span>Add Entry</span>
             </button>
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total Entries</p>
-                  <p className="text-3xl font-bold text-gray-900">{stats.total}</p>
-                </div>
-                <div className="bg-blue-100 p-3 rounded-lg">
-                  <FontAwesomeIcon icon={faClipboard} className="text-blue-600 text-xl" />
+          {/* Enhanced Stats Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {[
+              { 
+                label: "Total Entries", 
+                value: stats.total, 
+                icon: faClipboard, 
+                color: "blue",
+                gradient: "from-blue-500 to-indigo-600"
+              },
+              { 
+                label: "Homework", 
+                value: stats.homework, 
+                icon: faBookOpen, 
+                color: "green",
+                gradient: "from-green-500 to-emerald-600"
+              },
+              { 
+                label: "Remarks", 
+                value: stats.remarks, 
+                icon: faComments, 
+                color: "purple",
+                gradient: "from-purple-500 to-violet-600"
+              },
+              { 
+                label: "High Priority", 
+                value: stats.highPriority, 
+                icon: faExclamationTriangle, 
+                color: "red",
+                gradient: "from-red-500 to-rose-600"
+              }
+            ].map((stat, index) => (
+              <div 
+                key={stat.label}
+                className="group bg-white/70 backdrop-blur-sm rounded-3xl shadow-sm hover:shadow-xl p-6 transition-all duration-300 hover:scale-105 border border-white/50"
+                style={{ animationDelay: `${index * 100}ms` }}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 mb-1">{stat.label}</p>
+                    <p className="text-3xl font-bold text-gray-900 group-hover:scale-110 transition-transform duration-300">
+                      {stat.value}
+                    </p>
+                  </div>
+                  <div className={`w-16 h-16 bg-gradient-to-r ${stat.gradient} rounded-2xl flex items-center justify-center shadow-lg group-hover:rotate-12 transition-transform duration-300`}>
+                    <FontAwesomeIcon icon={stat.icon} className="text-white text-xl" />
+                  </div>
                 </div>
               </div>
-            </div>
-            
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Homework</p>
-                  <p className="text-3xl font-bold text-green-600">{stats.homework}</p>
-                </div>
-                <div className="bg-green-100 p-3 rounded-lg">
-                  <FontAwesomeIcon icon={faBookOpen} className="text-green-600 text-xl" />
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Remarks</p>
-                  <p className="text-3xl font-bold text-purple-600">{stats.remarks}</p>
-                </div>
-                <div className="bg-purple-100 p-3 rounded-lg">
-                  <FontAwesomeIcon icon={faComments} className="text-purple-600 text-xl" />
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">High Priority</p>
-                  <p className="text-3xl font-bold text-red-600">{stats.highPriority}</p>
-                </div>
-                <div className="bg-red-100 p-3 rounded-lg">
-                  <FontAwesomeIcon icon={faExclamationTriangle} className="text-red-600 text-xl" />
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
 
-          {/* Search and Filter */}
-          <div className="mb-6 bg-white rounded-xl shadow-sm p-6">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1 relative">
-                <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+          {/* Enhanced Search and Filter */}
+          <div className="mb-8 bg-white/70 backdrop-blur-sm rounded-3xl shadow-sm p-6 border border-white/50">
+            <div className="flex flex-col lg:flex-row gap-4">
+              {/* Search Bar */}
+              <div className="flex-1 relative group">
+                <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-500 transition-colors duration-200">
+                  <FontAwesomeIcon icon={faSearch} />
+                </div>
                 <input
                   type="text"
                   placeholder="Search entries..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="w-full pl-12 pr-4 py-3 bg-gray-50/50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 placeholder-gray-400"
                 />
               </div>
-              <div className="flex gap-4">
+              
+              {/* Filter Toggle */}
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`px-6 py-3 rounded-2xl font-medium flex items-center gap-2 transition-all duration-200 ${
+                  showFilters 
+                    ? 'bg-indigo-100 text-indigo-700 shadow-inner' 
+                    : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                <FontAwesomeIcon icon={faFilter} className={`transition-transform duration-200 ${showFilters ? 'rotate-12' : ''}`} />
+                Filters
+                <FontAwesomeIcon 
+                  icon={faChevronDown} 
+                  className={`text-sm transition-transform duration-200 ${showFilters ? 'rotate-180' : ''}`} 
+                />
+              </button>
+            </div>
+
+            {/* Expandable Filters */}
+            <div className={`overflow-hidden transition-all duration-300 ${showFilters ? 'mt-4 max-h-40' : 'max-h-0'}`}>
+              <div className="flex flex-wrap gap-4">
                 <select
                   value={filterType}
                   onChange={(e) => setFilterType(e.target.value as any)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="px-4 py-2 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
                 >
                   <option value="all">All Types</option>
                   <option value="homework">Homework</option>
@@ -416,26 +476,43 @@ export default function DiaryManagementPage() {
                 <select
                   value={filterPriority}
                   onChange={(e) => setFilterPriority(e.target.value as any)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="px-4 py-2 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
                 >
                   <option value="all">All Priorities</option>
                   <option value="high">High Priority</option>
                   <option value="medium">Medium Priority</option>
                   <option value="low">Low Priority</option>
                 </select>
+                
+                {/* Clear Filters */}
+                {(filterType !== "all" || filterPriority !== "all" || searchTerm) && (
+                  <button
+                    onClick={() => {
+                      setFilterType("all");
+                      setFilterPriority("all");
+                      setSearchTerm("");
+                    }}
+                    className="px-4 py-2 bg-red-50 text-red-600 rounded-2xl hover:bg-red-100 transition-colors duration-200 flex items-center gap-2"
+                  >
+                    <FontAwesomeIcon icon={faTimes} />
+                    Clear
+                  </button>
+                )}
               </div>
             </div>
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-xl mb-6">
-              <div className="flex items-center gap-2">
-                <FontAwesomeIcon icon={faExclamationTriangle} />
+            <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-2xl mb-6 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center">
+                  <FontAwesomeIcon icon={faExclamationTriangle} className="text-red-500 text-sm" />
+                </div>
                 <span>{error}</span>
               </div>
               <button
                 onClick={() => fetchDiaryEntries()}
-                className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+                className="mt-3 text-sm text-red-600 hover:text-red-800 underline transition-colors duration-200"
               >
                 Try Again
               </button>
@@ -445,25 +522,27 @@ export default function DiaryManagementPage() {
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
-                <LoadingSpinner size="large" />
-                <p className="mt-4 text-gray-600">Loading diary entries...</p>
+                <div className="w-16 h-16 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full mx-auto mb-4 animate-spin"></div>
+                <p className="text-gray-600 font-medium">Loading diary entries...</p>
               </div>
             </div>
           ) : (
             <>
-              {/* Entries Grid */}
+              {/* Enhanced Entries Grid */}
               {filteredEntries.length === 0 ? (
-                <div className="text-center py-12">
-                  <FontAwesomeIcon icon={faClipboard} className="text-gray-400 text-6xl mb-4" />
-                  <h3 className="text-xl font-semibold text-gray-600 mb-2">No entries found</h3>
-                  <p className="text-gray-500 mb-6">
+                <div className="text-center py-16">
+                  <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <FontAwesomeIcon icon={faClipboard} className="text-gray-400 text-3xl" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-3">No entries found</h3>
+                  <p className="text-gray-500 mb-8 max-w-md mx-auto">
                     {searchTerm || filterType !== "all" || filterPriority !== "all"
                       ? "Try adjusting your search or filter criteria"
                       : "Create your first diary entry to get started"}
                   </p>
                   <button
                     onClick={() => setShowForm(true)}
-                    className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium flex items-center gap-2 mx-auto transition-colors"
+                    className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-8 py-4 rounded-2xl font-medium flex items-center gap-3 mx-auto transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
                   >
                     <FontAwesomeIcon icon={faPlus} />
                     Add Entry
@@ -471,138 +550,176 @@ export default function DiaryManagementPage() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {filteredEntries.map((entry) => (
-                    <div key={entry.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden">
-                      {/* Entry Header */}
-                      <div className={`p-4 border-b`} style={{ backgroundColor: getPriorityColor(entry.priority).bgColor }}>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
-                              <FontAwesomeIcon 
-                                icon={entry.type === "homework" ? faBookOpen : faComments}
-                                className="text-lg"
-                                style={{ color: getPriorityColor(entry.priority).color }}
-                              />
+                  {filteredEntries.map((entry, index) => {
+                    const priorityColors = getPriorityColor(entry.priority);
+                    
+                    return (
+                      <div 
+                        key={entry.id}
+                        className="group bg-white/80 backdrop-blur-sm rounded-3xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border border-white/50 hover:scale-105"
+                        style={{ animationDelay: `${index * 50}ms` }}
+                      >
+                        {/* Enhanced Entry Header */}
+                        <div 
+                          className="p-6 border-b border-gray-100 relative overflow-hidden"
+                          style={{ backgroundColor: priorityColors.container }}
+                        >
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/20 to-transparent rounded-full -translate-y-16 translate-x-16"></div>
+                          
+                          <div className="flex items-center justify-between relative">
+                            <div className="flex items-center gap-4">
+                              <div 
+                                className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-lg group-hover:rotate-6 transition-transform duration-300"
+                              >
+                                <FontAwesomeIcon 
+                                  icon={entry.type === "homework" ? faBookOpen : faComments}
+                                  className="text-xl"
+                                  style={{ color: priorityColors.primary }}
+                                />
+                              </div>
+                              <div>
+                                <h3 className="font-bold text-gray-900 text-lg">
+                                  {entry.type === "homework" ? "Homework" : "Remark"}
+                                </h3>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <div
+                                    className="w-3 h-3 rounded-full shadow-sm"
+                                    style={{ backgroundColor: priorityColors.primary }}
+                                  ></div>
+                                  <span className="text-sm font-medium" style={{ color: priorityColors.onContainer }}>
+                                    {entry.priority.charAt(0).toUpperCase() + entry.priority.slice(1)} Priority
+                                  </span>
+                                </div>
+                              </div>
                             </div>
-                            <div>
-                              <h3 className="font-semibold text-gray-900">
-                                {entry.type === "homework" ? "Homework" : "Remark"}
-                              </h3>
-                              <p className="text-sm text-gray-600 flex items-center gap-1">
-                                <span
-                                  className="w-2 h-2 rounded-full"
-                                  style={{ backgroundColor: getPriorityColor(entry.priority).color }}
-                                ></span>
-                                {entry.priority.charAt(0).toUpperCase() + entry.priority.slice(1)} Priority
-                              </p>
+                            <div className="text-xs text-gray-500 bg-white/50 px-3 py-1 rounded-full">
+                              {formatDate(entry.createdAt)}
                             </div>
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {formatDate(entry.createdAt)}
                           </div>
                         </div>
-                      </div>
-                      
-                      <div className="p-4">
-                        {/* Content */}
-                        <div className="mb-4">
-                          {entry.type === "homework" ? (
-                            <div>
-                              <h4 className="font-medium text-gray-900 mb-2 line-clamp-1">
-                                {entry.title}
-                              </h4>
-                              <p className="text-sm text-gray-600 line-clamp-2 mb-2">
-                                {entry.description}
-                              </p>
-                              <div className="text-xs text-gray-500 mb-2">
-                                <span className="font-medium">Due:</span> {formatDate(entry.dueDate)}
-                              </div>
-                              {entry.metadata?.estimatedTime && (
-                                <div className="text-xs text-gray-500">
-                                  <span className="font-medium">Time:</span> {entry.metadata.estimatedTime}
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <div>
-                              <div className="flex items-center gap-2 mb-2">
-                                <FontAwesomeIcon 
-                                  icon={CATEGORY_ICONS[entry.category as keyof typeof CATEGORY_ICONS]} 
-                                  className="text-sm text-gray-600"
-                                />
-                                <span className="text-sm font-medium text-gray-600">
-                                  {entry.category.charAt(0).toUpperCase() + entry.category.slice(1)}
-                                </span>
-                              </div>
-                              <p className="text-sm text-gray-900 line-clamp-2 mb-2">
-                                {entry.personalRemarks}
-                              </p>
-                              {entry.studentName && (
-                                <div className="text-xs text-gray-500 mb-2">
-                                  <span className="font-medium">Student:</span> {entry.studentName}
-                                </div>
-                              )}
-                              {entry.tags && entry.tags.length > 0 && (
-                                <div className="flex flex-wrap gap-1 mb-2">
-                                  {entry.tags.slice(0, 3).map((tag: string, index: number) => (
-                                    <span key={index} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                                      {tag}
-                                    </span>
-                                  ))}
-                                  {entry.tags.length > 3 && (
-                                    <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-full">
-                                      +{entry.tags.length - 3} more
-                                    </span>
+                        
+                        <div className="p-6">
+                          {/* Enhanced Content */}
+                          <div className="mb-6">
+                            {entry.type === "homework" ? (
+                              <div>
+                                <h4 className="font-bold text-gray-900 mb-3 text-lg leading-tight">
+                                  {entry.title}
+                                </h4>
+                                <p className="text-gray-600 line-clamp-2 mb-4">
+                                  {entry.description}
+                                </p>
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <div className="w-5 h-5 bg-blue-100 rounded-lg flex items-center justify-center">
+                                      <FontAwesomeIcon icon={faCalendarAlt} className="text-blue-600 text-xs" />
+                                    </div>
+                                    <span className="text-gray-600">Due: {formatDate(entry.dueDate)}</span>
+                                  </div>
+                                  {entry.metadata?.estimatedTime && (
+                                    <div className="flex items-center gap-2 text-sm">
+                                      <div className="w-5 h-5 bg-green-100 rounded-lg flex items-center justify-center">
+                                        <FontAwesomeIcon icon={faUser} className="text-green-600 text-xs" />
+                                      </div>
+                                      <span className="text-gray-600">Time: {entry.metadata.estimatedTime}</span>
+                                    </div>
                                   )}
                                 </div>
-                              )}
+                              </div>
+                            ) : (
+                              <div>
+                                <div className="flex items-center gap-3 mb-3">
+                                  <div className="w-8 h-8 bg-purple-100 rounded-xl flex items-center justify-center">
+                                    <FontAwesomeIcon 
+                                      icon={CATEGORY_ICONS[entry.category as keyof typeof CATEGORY_ICONS]} 
+                                      className="text-purple-600 text-sm"
+                                    />
+                                  </div>
+                                  <span className="font-medium text-gray-900">
+                                    {entry.category.charAt(0).toUpperCase() + entry.category.slice(1)}
+                                  </span>
+                                </div>
+                                <p className="text-gray-700 line-clamp-3 mb-4 leading-relaxed">
+                                  {entry.personalRemarks}
+                                </p>
+                                {entry.studentName && (
+                                  <div className="flex items-center gap-2 text-sm mb-3">
+                                    <div className="w-5 h-5 bg-indigo-100 rounded-lg flex items-center justify-center">
+                                      <FontAwesomeIcon icon={faUser} className="text-indigo-600 text-xs" />
+                                    </div>
+                                    <span className="text-gray-600">Student: {entry.studentName}</span>
+                                  </div>
+                                )}
+                                {entry.tags && entry.tags.length > 0 && (
+                                  <div className="flex flex-wrap gap-2 mb-3">
+                                    {entry.tags.slice(0, 3).map((tag: string, index: number) => (
+                                      <span key={index} className="bg-blue-50 text-blue-700 text-xs px-3 py-1 rounded-full font-medium">
+                                        {tag}
+                                      </span>
+                                    ))}
+                                    {entry.tags.length > 3 && (
+                                      <span className="bg-gray-50 text-gray-600 text-xs px-3 py-1 rounded-full font-medium">
+                                        +{entry.tags.length - 3} more
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Enhanced Details */}
+                          <div className="space-y-3 mb-6">
+                            <div className="flex items-center gap-3 p-3 bg-gray-50/50 rounded-2xl">
+                              <div className="w-8 h-8 bg-indigo-100 rounded-xl flex items-center justify-center">
+                                <FontAwesomeIcon icon={faUsers} className="text-indigo-600 text-sm" />
+                              </div>
+                              <span className="text-gray-700 font-medium">{entry.className}</span>
+                            </div>
+                            
+                            <div className="flex items-center gap-3 p-3 bg-gray-50/50 rounded-2xl">
+                              <div className="w-8 h-8 bg-green-100 rounded-xl flex items-center justify-center">
+                                <FontAwesomeIcon icon={faBook} className="text-green-600 text-sm" />
+                              </div>
+                              <span className="text-gray-700 font-medium">{entry.subjectName}</span>
+                            </div>
+                          </div>
+
+                          {/* Enhanced Attachments */}
+                          {entry.attachments && entry.attachments.length > 0 && (
+                            <div className="mb-6 p-3 bg-blue-50/50 rounded-2xl">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-blue-100 rounded-xl flex items-center justify-center">
+                                  <FontAwesomeIcon icon={faFileAlt} className="text-blue-600 text-sm" />
+                                </div>
+                                <span className="text-blue-700 font-medium">
+                                  {entry.attachments.length} attachment{entry.attachments.length > 1 ? 's' : ''}
+                                </span>
+                              </div>
                             </div>
                           )}
-                        </div>
 
-                        {/* Details */}
-                        <div className="space-y-2 mb-4">
-                          <div className="flex items-center gap-2">
-                            <FontAwesomeIcon icon={faUsers} className="text-gray-400 text-sm" />
-                            <span className="text-sm text-gray-600">{entry.className}</span>
+                          {/* Enhanced Actions */}
+                          <div className="flex gap-3 pt-4 border-t border-gray-100">
+                            <button
+                              onClick={() => handleEditEntry(entry)}
+                              className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 px-4 py-3 rounded-2xl font-medium transition-all duration-200 flex items-center justify-center gap-2 group hover:scale-105"
+                            >
+                              <FontAwesomeIcon icon={faEdit} className="group-hover:rotate-12 transition-transform duration-200" />
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteEntry(entry.id, entry.type)}
+                              className="flex-1 bg-red-50 hover:bg-red-100 text-red-700 px-4 py-3 rounded-2xl font-medium transition-all duration-200 flex items-center justify-center gap-2 group hover:scale-105"
+                            >
+                              <FontAwesomeIcon icon={faTrash} className="group-hover:scale-110 transition-transform duration-200" />
+                              Delete
+                            </button>
                           </div>
-                          
-                          <div className="flex items-center gap-2">
-                            <FontAwesomeIcon icon={faBook} className="text-gray-400 text-sm" />
-                            <span className="text-sm text-gray-600">{entry.subjectName}</span>
-                          </div>
-                        </div>
-
-                        {/* Attachments */}
-                        {entry.attachments && entry.attachments.length > 0 && (
-                          <div className="mb-4">
-                            <div className="flex items-center gap-2 text-sm text-blue-600">
-                              <FontAwesomeIcon icon={faFileAlt} />
-                              <span>{entry.attachments.length} attachment(s)</span>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Actions */}
-                        <div className="flex items-center gap-2 pt-4 border-t">
-                          <button
-                            onClick={() => handleEditEntry(entry)}
-                            className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
-                          >
-                            <FontAwesomeIcon icon={faEdit} />
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteEntry(entry.id, entry.type)}
-                            className="flex-1 bg-red-50 hover:bg-red-100 text-red-600 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
-                          >
-                            <FontAwesomeIcon icon={faTrash} />
-                            Delete
-                          </button>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </>
@@ -610,9 +727,10 @@ export default function DiaryManagementPage() {
         </div>
       </main>
 
+      {/* Enhanced Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl max-w-5xl w-full max-h-[95vh] overflow-hidden shadow-xl">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
+          <div className="bg-white rounded-3xl max-w-5xl w-full max-h-[95vh] overflow-hidden shadow-2xl transform animate-in zoom-in-95 duration-300">
             <DiaryForm
               entryId={editingEntry?.id}
               initialData={editingEntry}
@@ -622,6 +740,127 @@ export default function DiaryManagementPage() {
           </div>
         </div>
       )}
+
+      {/* Floating Action Button for Mobile */}
+      <button
+        onClick={() => setShowForm(true)}
+        className="fixed bottom-6 right-6 lg:hidden w-16 h-16 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-full shadow-xl hover:shadow-2xl flex items-center justify-center transition-all duration-300 hover:scale-110 z-40"
+      >
+        <FontAwesomeIcon icon={faPlus} className="text-xl" />
+      </button>
+
+      {/* Custom Styles */}
+      <style jsx>{`
+        @keyframes fade-in {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+        
+        @keyframes zoom-in-95 {
+          from {
+            opacity: 0;
+            transform: scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        
+        @keyframes animate-in {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        .animate-in {
+          animation: animate-in 0.3s ease-out;
+        }
+        
+        .fade-in {
+          animation: fade-in 0.3s ease-out;
+        }
+        
+        .zoom-in-95 {
+          animation: zoom-in-95 0.3s ease-out;
+        }
+        
+        .line-clamp-1 {
+          display: -webkit-box;
+          -webkit-line-clamp: 1;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        
+        .line-clamp-2 {
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        
+        .line-clamp-3 {
+          display: -webkit-box;
+          -webkit-line-clamp: 3;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        
+        /* Smooth scrollbar */
+        ::-webkit-scrollbar {
+          width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+          background: #f1f5f9;
+          border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+          background: linear-gradient(to bottom, #6366f1, #8b5cf6);
+          border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+          background: linear-gradient(to bottom, #4f46e5, #7c3aed);
+        }
+        
+        /* Glass morphism effect */
+        .backdrop-blur-sm {
+          backdrop-filter: blur(8px);
+        }
+        
+        /* Ripple effect for buttons */
+        .group:active::before {
+          content: '';
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: 0;
+          height: 0;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.5);
+          transform: translate(-50%, -50%);
+          animation: ripple 0.6s ease-out;
+        }
+        
+        @keyframes ripple {
+          to {
+            width: 300px;
+            height: 300px;
+            opacity: 0;
+          }
+        }
+      `}</style>
     </div>
   );
-} 
+}

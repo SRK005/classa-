@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../../../lib/firebaseClient';
-import { collection, query, where, getDocs, doc, Query, DocumentReference } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, Query, DocumentReference, updateDoc } from 'firebase/firestore';
 import { BlockMath, InlineMath } from 'react-katex';
 import 'katex/dist/katex.min.css';
 import SenseAIPickDialog from "./SenseAIPickDialog";
@@ -32,6 +32,8 @@ interface EdueronQuestionsDialogProps {
   classId?: string;
   schoolId?: string | null;
   testId?: DocumentReference;
+  showSchoolQuestions?: boolean; // New prop to control question source
+  onRefreshTest?: () => Promise<void>; // New prop to refresh test data
 }
 
 const QUESTIONS_PER_PAGE = 10;
@@ -65,7 +67,7 @@ function getTagColor(type: string, value: string) {
   return 'bg-gray-100 text-gray-800';
 }
 
-const EdueronQuestionsDialog: React.FC<EdueronQuestionsDialogProps> = ({ open, onClose, onUpdate, initialSelected = [], classId, schoolId, testId }) => {
+const EdueronQuestionsDialog: React.FC<EdueronQuestionsDialogProps> = ({ open, onClose, onUpdate, initialSelected = [], classId, schoolId, testId, showSchoolQuestions = false, onRefreshTest }) => {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -83,8 +85,13 @@ const EdueronQuestionsDialog: React.FC<EdueronQuestionsDialogProps> = ({ open, o
   const [class12Id, setClass12Id] = useState<string>('');
   const [explanationOpen, setExplanationOpen] = useState<string | null>(null);
   const [explanationContent, setExplanationContent] = useState<{explanation?: string, solution?: string}>({});
-  const [spValue, setSpValue] = useState(true);
+  const [spValue, setSpValue] = useState(!showSchoolQuestions);
   const [senseAIPickOpen, setSenseAIPickOpen] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [existingQuestions, setExistingQuestions] = useState<string[]>([]);
+  const [previewMode, setPreviewMode] = useState(false);
+  const [removeMode, setRemoveMode] = useState(false);
 
   // Fetch classes
   useEffect(() => {
@@ -188,6 +195,29 @@ const EdueronQuestionsDialog: React.FC<EdueronQuestionsDialogProps> = ({ open, o
     if (spValue || schoolId) fetchLessons();
   }, [selectedChapter, spValue, schoolId]);
 
+  // Fetch existing questions from test
+  useEffect(() => {
+    async function fetchExistingQuestions() {
+      if (!testId) return;
+      try {
+        const testDoc = await getDoc(testId);
+        if (testDoc.exists()) {
+          const testData = testDoc.data();
+          const existingQuestionRefs = testData.questions || [];
+          const existingIds = existingQuestionRefs.map((ref: any) => ref.id || ref.path?.split('/').pop());
+          setExistingQuestions(existingIds);
+          // Initialize selected with existing questions
+          setSelected(existingIds);
+        }
+      } catch (err) {
+        console.error('Error fetching existing questions:', err);
+      }
+    }
+    if (open && testId) {
+      fetchExistingQuestions();
+    }
+  }, [open, testId]);
+
   // Fetch questions
   useEffect(() => {
     async function fetchQuestions() {
@@ -244,6 +274,121 @@ const EdueronQuestionsDialog: React.FC<EdueronQuestionsDialogProps> = ({ open, o
 
   const handleCheckbox = (id: string) => {
     setSelected(prev => prev.includes(id) ? prev.filter(qid => qid !== id) : [...prev, id]);
+  };
+
+  // Handler to preview selected questions
+  const handlePreviewQuestions = () => {
+    setPreviewMode(true);
+  };
+
+  // Handler to remove selected questions
+  const handleRemoveQuestions = async () => {
+    if (!testId) {
+      setSaveMessage('No test ID provided.');
+      return;
+    }
+    if (selected.length === 0) {
+      setSaveMessage('Please select questions to remove.');
+      return;
+    }
+    
+    setSaveLoading(true);
+    setSaveMessage(null);
+    
+    try {
+      // Get current test data
+      const testDoc = await getDoc(testId);
+      const currentData = testDoc.data();
+      const existingQuestions = currentData?.questions || [];
+      
+      // Remove selected questions from existing questions
+      const existingQuestionIds = existingQuestions.map((ref: any) => ref.id || ref.path?.split('/').pop());
+      const remainingQuestions = existingQuestions.filter((ref: any, index: number) => 
+        !selected.includes(existingQuestionIds[index])
+      );
+      
+      // Update the test document with remaining questions
+      await updateDoc(testId, { questions: remainingQuestions });
+      
+      setSaveMessage(`Successfully removed ${selected.length} questions!`);
+      
+      // Refresh test data if callback provided
+      if (onRefreshTest) {
+        await onRefreshTest();
+      }
+      
+      // Clear selected and close dialog
+      setSelected([]);
+      setTimeout(() => {
+        setSaveMessage(null);
+        onClose();
+      }, 1500);
+      
+    } catch (err) {
+      console.error('Error removing questions:', err);
+      setSaveMessage('Failed to remove questions. Please try again.');
+    } finally {
+      setSaveLoading(false);
+    }
+  };
+
+  // Handler to save selected questions to the test (merge with existing)
+  const handleSaveQuestions = async () => {
+    if (!testId) {
+      setSaveMessage('No test ID provided.');
+      return;
+    }
+    if (selected.length === 0) {
+      setSaveMessage('Please select at least one question.');
+      return;
+    }
+    
+    setSaveLoading(true);
+    setSaveMessage(null);
+    
+    try {
+      // Get current test data to merge with existing questions
+      const testDoc = await getDoc(testId);
+      const currentData = testDoc.data();
+      const existingQuestions = currentData?.questions || [];
+      
+      // Create document references for newly selected questions
+      const newQuestionRefs = selected.map(qId => doc(db, 'questionCollection', qId));
+      
+      // Merge existing questions with new questions (avoid duplicates)
+      const existingQuestionIds = existingQuestions.map((ref: any) => ref.id || ref.path?.split('/').pop());
+      const newQuestionIds = selected;
+      
+      // Filter out duplicates
+      const uniqueNewQuestions = newQuestionRefs.filter((ref, index) => 
+        !existingQuestionIds.includes(newQuestionIds[index])
+      );
+      
+      // Combine existing and new questions
+      const allQuestions = [...existingQuestions, ...uniqueNewQuestions];
+      
+      // Update the test document with merged questions
+      await updateDoc(testId, { questions: allQuestions });
+      
+      setSaveMessage(`Successfully added ${uniqueNewQuestions.length} new questions!`);
+      
+      // Refresh test data if callback provided
+      if (onRefreshTest) {
+        await onRefreshTest();
+      }
+      
+      // Auto-close after success
+      setTimeout(() => {
+        setSaveMessage(null);
+        onClose();
+      }, 1500);
+      
+    } catch (err) {
+      console.error('Error saving questions:', err);
+      setSaveMessage('Failed to save questions. Please try again.');
+    } finally {
+      setSaveLoading(false);
+    }
   };
 
   // Counter for selected questions
@@ -390,13 +535,52 @@ const EdueronQuestionsDialog: React.FC<EdueronQuestionsDialogProps> = ({ open, o
                 disabled={currentPage === totalPages}
               >Next</button>
             </div>
-            <div className="flex justify-end mt-8">
-              <button
-                className="bg-purple-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-purple-700 transition text-lg"
-                onClick={() => setSenseAIPickOpen(true)}
-              >
-                SenseAI Pick
-              </button>
+            <div className="flex justify-between items-center mt-8">
+              <div className="flex items-center gap-4">
+                <button
+                  className="bg-purple-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-purple-700 transition text-lg"
+                  onClick={() => setSenseAIPickOpen(true)}
+                >
+                  SenseAI Pick
+                </button>
+                <button
+                  className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-green-700 transition text-lg"
+                  onClick={handlePreviewQuestions}
+                  disabled={selectedCount === 0}
+                >
+                  Preview Selected
+                </button>
+                <button
+                  className="bg-red-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-red-700 transition text-lg flex items-center justify-center"
+                  onClick={handleRemoveQuestions}
+                  disabled={saveLoading || selectedCount === 0}
+                >
+                  {saveLoading ? (
+                    <span className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></span>
+                  ) : null}
+                  Remove Selected
+                </button>
+                {saveMessage && (
+                  <div className={`text-sm font-semibold ${saveMessage.includes('success') ? 'text-green-600' : 'text-red-500'}`}>
+                    {saveMessage}
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-4">
+                <span className="text-gray-600 font-medium">
+                  {selectedCount} question{selectedCount !== 1 ? 's' : ''} selected
+                </span>
+                <button
+                  className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-blue-700 transition text-lg flex items-center justify-center"
+                  onClick={handleSaveQuestions}
+                  disabled={saveLoading || selectedCount === 0}
+                >
+                  {saveLoading ? (
+                    <span className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></span>
+                  ) : null}
+                  Save Selected Questions
+                </button>
+              </div>
             </div>
           </>
         )}
@@ -444,6 +628,108 @@ const EdueronQuestionsDialog: React.FC<EdueronQuestionsDialogProps> = ({ open, o
           classId={classId}
           testId={testId}
         />
+        
+        {/* Preview Dialog */}
+        <PreviewQuestionsDialog
+          open={previewMode}
+          onClose={() => setPreviewMode(false)}
+          questions={questions.filter(q => selected.includes(q.id))}
+          title={`Preview Selected Questions (${selected.length})`}
+        />
+      </div>
+    </div>
+  );
+};
+
+// Preview Dialog Component
+const PreviewQuestionsDialog: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  questions: Question[];
+  title: string;
+}> = ({ open, onClose, questions, title }) => {
+  const [currentPage, setCurrentPage] = useState(1);
+  const QUESTIONS_PER_PAGE = 5;
+
+  if (!open) return null;
+
+  const totalPages = Math.ceil(questions.length / QUESTIONS_PER_PAGE);
+  const paginatedQuestions = questions.slice((currentPage - 1) * QUESTIONS_PER_PAGE, currentPage * QUESTIONS_PER_PAGE);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-4xl w-[90vw] max-h-[90vh] overflow-y-auto relative animate-fade-in border border-blue-200">
+        <button
+          className="absolute top-3 right-3 text-gray-400 hover:text-gray-700 text-2xl font-bold"
+          onClick={onClose}
+          aria-label="Close"
+        >
+          &times;
+        </button>
+        <h2 className="text-2xl font-bold text-blue-700 mb-6">{title}</h2>
+        {questions.length === 0 ? (
+          <div className="text-center text-gray-500 py-10">No questions to preview.</div>
+        ) : (
+          <>
+            <div className="space-y-6 max-h-[60vh] overflow-y-auto">
+              {paginatedQuestions.map((q, idx) => {
+                const isCorrect = (option: string) => option.trim().toLowerCase() === (q.correct || '').trim().toLowerCase();
+                return (
+                  <div key={q.id} className="bg-gray-50 rounded-xl p-6 border border-gray-200">
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {q.difficulty && (
+                        <span className={`px-2 py-1 rounded text-xs font-semibold ${getTagColor('difficulty', q.difficulty)}`}>{q.difficulty}</span>
+                      )}
+                      {q.bloom && (
+                        <span className={`px-2 py-1 rounded text-xs font-semibold ${getTagColor('bloom', q.bloom)}`}>{q.bloom}</span>
+                      )}
+                    </div>
+                    <div className="font-semibold text-lg text-gray-900 mb-3">
+                      {(currentPage - 1) * QUESTIONS_PER_PAGE + idx + 1}. {renderWithLatex(q.question)}
+                    </div>
+                    <div className="flex flex-col gap-2 mb-4">
+                      <div className={`flex items-center gap-2 ${isCorrect(q.optionA) ? 'bg-green-50 border-2 border-green-400 rounded-lg font-bold' : ''} p-2`}>
+                        <span className="font-bold">A.</span> {renderWithLatex(q.optionA)}
+                      </div>
+                      <div className={`flex items-center gap-2 ${isCorrect(q.optionB) ? 'bg-green-50 border-2 border-green-400 rounded-lg font-bold' : ''} p-2`}>
+                        <span className="font-bold">B.</span> {renderWithLatex(q.optionB)}
+                      </div>
+                      <div className={`flex items-center gap-2 ${isCorrect(q.optionC) ? 'bg-green-50 border-2 border-green-400 rounded-lg font-bold' : ''} p-2`}>
+                        <span className="font-bold">C.</span> {renderWithLatex(q.optionC)}
+                      </div>
+                      <div className={`flex items-center gap-2 ${isCorrect(q.optionD) ? 'bg-green-50 border-2 border-green-400 rounded-lg font-bold' : ''} p-2`}>
+                        <span className="font-bold">D.</span> {renderWithLatex(q.optionD)}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {totalPages > 1 && (
+              <div className="flex justify-center items-center gap-4 mt-6">
+                <button
+                  className="px-4 py-2 rounded bg-gray-200 text-gray-700 font-semibold hover:bg-gray-300 transition"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >Previous</button>
+                <span className="text-gray-700 font-semibold">Page {currentPage} of {totalPages}</span>
+                <button
+                  className="px-4 py-2 rounded bg-gray-200 text-gray-700 font-semibold hover:bg-gray-300 transition"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >Next</button>
+              </div>
+            )}
+            <div className="flex justify-center mt-6">
+              <button
+                className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-blue-700 transition text-lg"
+                onClick={onClose}
+              >
+                Close Preview
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

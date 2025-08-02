@@ -57,7 +57,7 @@ export default function ManageAssessments() {
               </button>
               <h2 className="text-xl font-semibold text-gray-800 mb-6">Select Assessment Type</h2>
               <div className="flex flex-col gap-3 w-full">
-                <button className="bg-blue-100 text-blue-900 px-5 py-3 rounded-lg font-medium border border-blue-100 hover:bg-blue-200 hover:text-blue-900 transition" onClick={() => { setShowDialog(false); router.push('/assessment-question-bank/assessments/mock-create-test'); }}>Create Custom Test</button>
+                <button className="bg-blue-100 text-blue-900 px-5 py-3 rounded-lg font-medium border border-blue-100 hover:bg-blue-200 hover:text-blue-900 transition" onClick={() => { setShowDialog(false); router.push('/assessment-question-bank/assessments/custom-test-creation'); }}>Create Custom Test</button>
                 <button className="bg-purple-100 text-purple-900 px-5 py-3 rounded-lg font-medium border border-purple-100 hover:bg-purple-200 hover:text-purple-900 transition" onClick={() => {/* handle NEET mock */}}>Create NEET MOCK</button>
                 <button className="bg-green-100 text-green-900 px-5 py-3 rounded-lg font-medium border border-green-100 hover:bg-green-200 hover:text-green-900 transition" onClick={() => {/* handle JEE mock */}}>Create JEE Mock</button>
                 <button className="bg-pink-100 text-pink-900 px-5 py-3 rounded-lg font-medium border border-pink-100 hover:bg-pink-200 hover:text-pink-900 transition" onClick={() => {/* handle PYQ test */}}>Create PYQ test</button>
