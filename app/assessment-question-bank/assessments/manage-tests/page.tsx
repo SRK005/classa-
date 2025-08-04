@@ -237,13 +237,19 @@ export default function ManageTestsPage() {
   }, [activeTab]);
 
   const handleDelete = async (id: string) => {
+    if (!id) return;
     setActionLoading(id);
     try {
       await deleteDoc(doc(db, "test", id));
-      setTests((prev) => prev.filter((t) => t.id !== id));
+      // Remove from both allTests and tests to ensure UI updates correctly
+      setAllTests(prev => prev.filter(t => t.id !== id));
+      setTests(prev => prev.filter(t => t.id !== id));
       setConfirmDeleteId(null);
+      // Bust the cache
+      localStorage.removeItem(TESTS_CACHE_KEY);
     } catch (err) {
-      alert("Failed to delete test.");
+      console.error("Error deleting test:", err);
+      setError("Failed to delete test. You may not have the required permissions.");
     } finally {
       setActionLoading(null);
     }
@@ -441,120 +447,80 @@ export default function ManageTestsPage() {
 
   // Helper function to find question in different collections
   const findQuestionInCollections = async (questionId: string) => {
-    const collections = ['question', 'questions', 'Question', 'questionBank', 'QuestionBank'];
-    
-    for (const collectionName of collections) {
+    if (!questionId) return null;
+
+    // Search in the most likely collection names based on documentation and code.
+    const collectionsToTry = ["questions", "questionCollection", "test"];
+
+    for (const col of collectionsToTry) {
       try {
-        const qRef = doc(db, collectionName, questionId);
-        const qSnap = await getDoc(qRef);
-        if (qSnap.exists()) {
-          console.log(`Found question in '${collectionName}' collection:`, questionId);
-          return qSnap;
+        const docRef = doc(db, col, questionId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const d = docSnap.data();
+          // Return a consistently formatted question object
+          return {
+            id: docSnap.id,
+            question: d.questionText || d.question || d.text || "",
+            optionA: d.optionA || d.option_a || d.options?.[0] || "",
+            optionB: d.optionB || d.option_b || d.options?.[1] || "",
+            optionC: d.optionC || d.option_c || d.options?.[2] || "",
+            optionD: d.optionD || d.option_d || d.options?.[3] || "",
+            correct: d.correct || d.correctAnswer || d.answer || "",
+            explanation: d.explanation || "",
+            solution: d.solution || "",
+            difficulty: d.difficulty || "",
+            bloom: d.bloom || "",
+          };
         }
-      } catch (err) {
-        console.log(`Collection '${collectionName}' doesn't exist or no access`);
+      } catch (error) {
+        // This can happen if a collection doesn't exist or due to permissions, so we don't treat it as a fatal error.
+        console.warn(`Could not check for question ${questionId} in collection '${col}'.`);
       }
     }
+
+    console.error(`Question with ID ${questionId} not found in any of the tried collections.`);
     return null;
   };
 
   // Handler to preview test questions
   const handlePreviewQuestions = async (test: any) => {
-    setPreviewDialogOpen(test.id);
-    try {
-      // Fetch question data from test
-      let questionsData = [];
-      console.log('Test questions raw data:', test.questions);
-      
-      if (test.questions && test.questions.length > 0) {
-        questionsData = await Promise.all(
-          test.questions.map(async (qItem: any, index: number) => {
-            console.log(`Processing question ${index}:`, qItem);
-            let qSnap;
-            let questionId = null;
-            
-            try {
-              // Handle different question reference formats
-              if (typeof qItem === 'string') {
-                // If it's a string ID, create document reference
-                questionId = qItem;
-                const qRef = doc(db, 'questions', qItem);
-                qSnap = await getDoc(qRef);
-              } else if (qItem && typeof qItem === 'object') {
-                // Handle object formats
-                if (qItem.id) {
-                  // Object with id property
-                  questionId = qItem.id;
-                  const qRef = doc(db, 'questions', qItem.id);
-                  qSnap = await getDoc(qRef);
-                } else if (qItem._path && qItem._path.segments) {
-                  // Firestore DocumentReference object
-                  questionId = qItem._path.segments[qItem._path.segments.length - 1];
-                  const qRef = doc(db, 'questions', questionId);
-                  qSnap = await getDoc(qRef);
-                } else if (qItem.path) {
-                  // Path string
-                  const pathParts = qItem.path.split('/');
-                  questionId = pathParts[pathParts.length - 1];
-                  const qRef = doc(db, 'questions', questionId);
-                  qSnap = await getDoc(qRef);
-                } else if (qItem.referencePath) {
-                  // Handle referencePath format like 'questionCollection/questionId'
-                  const pathParts = qItem.referencePath.split('/');
-                  questionId = pathParts[pathParts.length - 1];
-                  const collectionName = pathParts[0];
-                  console.log(`Processing question ${index} with referencePath:`, questionId, 'from collection:', collectionName);
-                  const qRef = doc(db, collectionName, questionId);
-                  qSnap = await getDoc(qRef);
-                } else {
-                  console.warn('Unknown question reference format:', qItem);
-                  return null;
-                }
-              } else {
-                console.warn('Invalid question reference:', qItem);
-                return null;
-              }
-              
-              if (!qSnap.exists()) {
-                console.warn(`Question document not found: ${questionId}`);
-                return null;
-              }
-              
-              const d = qSnap.data() || {};
-              console.log('Question data from Firestore:', {
-                id: qSnap.id,
-                rawData: d,
-                allFields: Object.keys(d)
-              });
-              
-              return {
-                id: qSnap.id,
-                question: d.questionText || d.question || d.text || "",
-                optionA: d.optionA || d.option_a || d.options?.[0] || "",
-                optionB: d.optionB || d.option_b || d.options?.[1] || "",
-                optionC: d.optionC || d.option_c || d.options?.[2] || "",
-                optionD: d.optionD || d.option_d || d.options?.[3] || "",
-                correct: d.correct || d.correctAnswer || d.answer || "",
-                explanation: d.explanation || "",
-                solution: d.solution || "",
-                difficulty: d.difficulty || "",
-                bloom: d.bloom || "",
-              };
-            } catch (error) {
-              console.error(`Error processing question ${index}:`, error, qItem);
-              return null;
-            }
-          })
-        );
-        
-        // Filter out null results
-        questionsData = questionsData.filter(q => q !== null);
-      }
-      console.log('Final preview questions data:', questionsData);
-      setPreviewQuestions(questionsData);
-    } catch (err) {
-      console.error("Error fetching questions for preview:", err);
+    if (!test || !test.questions || test.questions.length === 0) {
       setPreviewQuestions([]);
+      setPreviewDialogOpen(test.id);
+      return;
+    }
+
+    setActionLoading(test.id);
+    setPreviewDialogOpen(test.id);
+
+    try {
+      const questionPromises = test.questions.map((qRef: any) => {
+        let id;
+        // Handle various reference formats to extract the question ID
+        if (typeof qRef === 'string') {
+          id = qRef;
+        } else if (qRef && typeof qRef === 'object') {
+          id = qRef.id || qRef.path?.split('/').pop() || qRef.referencePath?.split('/').pop() || qRef._path?.segments?.pop();
+        }
+        
+        if (!id) {
+          console.warn('Could not determine question ID from reference:', qRef);
+          return Promise.resolve(null);
+        }
+        
+        return findQuestionInCollections(id);
+      });
+
+      const fetchedQuestions = (await Promise.all(questionPromises)).filter(Boolean);
+      setPreviewQuestions(fetchedQuestions);
+
+    } catch (error) {
+      console.error("Error fetching preview questions:", error);
+      setError("Could not load questions for preview.");
+      setPreviewQuestions([]);
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -801,13 +767,12 @@ export default function ManageTestsPage() {
                         <div className="flex-1">
                           <h3 className="text-xl font-bold text-gray-800 mb-2">{test.name}</h3>
                           <div className="flex items-center gap-4 text-sm text-gray-600">
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-2 text-sm text-gray-500">
                               <DocumentTextIcon className="h-4 w-4" />
-                              <span>Class: {test.className}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <ClockIcon className="h-4 w-4" />
-                              <span>Questions: {test.questions ? test.questions.length : 0}</span>
+                              <span>
+                                Questions: {test.questions?.length || 0}
+                                {test.totalQuestions > 0 && ` / ${test.totalQuestions}`}
+                              </span>
                             </div>
                           </div>
                         </div>
