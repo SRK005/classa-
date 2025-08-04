@@ -21,6 +21,17 @@ import PDFDownloadButton from "../../pyq/neet/PDFDownloadButton";
 import TestPreviewDialog from "../../components/TestPreviewDialog";
 import latexToPngDataUrl from "../../pyq/neet/latexToDataUrl";
 import { Dialog } from "@headlessui/react";
+import { 
+  ChartBarIcon, 
+  CheckCircleIcon, 
+  DocumentTextIcon, 
+  ClockIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  PencilIcon,
+  DocumentArrowDownIcon,
+  TrashIcon
+} from "@heroicons/react/24/outline";
 
 const pastelStatus = {
   published: "bg-blue-100 text-blue-700",
@@ -52,27 +63,50 @@ async function splitTextWithLatex(text: string) {
 
 export default function ManageTestsPage() {
   const [tests, setTests] = React.useState<any[]>([]);
+  const [allTests, setAllTests] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
   const router = useRouter();
-  const [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(
-    null
-  );
+  const [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null);
   const [actionLoading, setActionLoading] = React.useState<string | null>(null);
   const [page, setPage] = React.useState(1);
   const [pageSize] = React.useState(6);
   const [userSchoolId, setUserSchoolId] = React.useState<string | null>(null);
-  const [selectDialogOpen, setSelectDialogOpen] = React.useState<string | null>(
-    null
-  );
+  const [selectDialogOpen, setSelectDialogOpen] = React.useState<string | null>(null);
   const [selectedQuestions, setSelectedQuestions] = React.useState<{
     [testId: string]: string[];
   }>({});
   const [preparePdfTest, setPreparePdfTest] = React.useState<any | null>(null);
   const [pdfQuestions, setPdfQuestions] = React.useState<any[]>([]);
   const [pdfLoading, setPdfLoading] = React.useState(false);
+  const [activeTab, setActiveTab] = React.useState<'all' | 'online' | 'drafted'>('all');
   const [previewDialogOpen, setPreviewDialogOpen] = React.useState<string | null>(null);
   const [previewQuestions, setPreviewQuestions] = React.useState<any[]>([]);
+  const [isClient, setIsClient] = React.useState(false);
+  
+  // Cache key for tests
+  const TESTS_CACHE_KEY = 'manage_tests_cache';
+  const CACHE_EXPIRY_TIME = 5 * 60 * 1000; // 5 minutes
+
+  // Fix hydration by ensuring client-side rendering
+  React.useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // Helper function for consistent date formatting
+  const formatDate = (date: any) => {
+    if (!date || !isClient) return "-";
+    try {
+      const d = new Date(date);
+      return d.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+    } catch {
+      return "-";
+    }
+  };
 
   // Fetch current user's schoolID
   React.useEffect(() => {
@@ -89,9 +123,28 @@ export default function ManageTestsPage() {
   }, []);
 
   React.useEffect(() => {
+    if (!userSchoolId) return;
+    
     (async () => {
       setLoading(true);
       try {
+        // Check cache first
+        const cached = localStorage.getItem(TESTS_CACHE_KEY);
+        if (cached) {
+          const { data, timestamp } = JSON.parse(cached);
+          if (Date.now() - timestamp < CACHE_EXPIRY_TIME) {
+            setAllTests(data);
+            // Filter tests based on school and apply manual filtering
+            const filteredTests = data.filter((t: any) => {
+              const matchesSchool = !userSchoolId || !t.schoolId || t.schoolId === userSchoolId;
+              return matchesSchool;
+            });
+            setTests(filteredTests);
+            setLoading(false);
+            return;
+          }
+        }
+
         const testsSnap = await getDocs(collection(db, "test"));
         const testList: any[] = [];
         for (const testDoc of testsSnap.docs) {
@@ -112,6 +165,8 @@ export default function ManageTestsPage() {
             end: data.end?.toDate ? data.end.toDate() : data.end,
             status: (data.status || "drafted") as keyof typeof pastelStatus,
             online: data.online,
+            published: data.published,
+            schoolId: data.schoolId,
             questions: Array.isArray(data.questions) ? data.questions : [],
             totalQuestions:
               typeof data.totalQuestions === "number"
@@ -119,27 +174,67 @@ export default function ManageTestsPage() {
                 : null,
           });
         }
-        // Filter out published tests (online === true)
-        setTests(testList.filter((t) => !t.online));
+        
+        // Cache the data
+        localStorage.setItem(TESTS_CACHE_KEY, JSON.stringify({
+          data: testList,
+          timestamp: Date.now()
+        }));
+        
+        setAllTests(testList);
+        
+        // Filter tests based on school and apply manual filtering
+        const filteredTests = testList.filter((t) => {
+          const matchesSchool = !userSchoolId || !t.schoolId || t.schoolId === userSchoolId;
+          return matchesSchool;
+        });
+        setTests(filteredTests);
       } catch (err: any) {
         setError(err.message || "Failed to fetch tests.");
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [userSchoolId]);
 
-  // Sort all tests by end time descending
-  const sortedTests = [...tests].sort((a, b) => {
-    const aEnd = a.end ? new Date(a.end).getTime() : 0;
-    const bEnd = b.end ? new Date(b.end).getTime() : 0;
-    return bEnd - aEnd;
-  });
-  const totalPages = Math.ceil(sortedTests.length / pageSize);
-  const paginatedTests = sortedTests.slice(
+  // Calculate stats
+  const stats = React.useMemo(() => {
+    const now = new Date();
+    return {
+      total: tests.length,
+      drafted: tests.filter(t => !t.online).length,
+      online: tests.filter(t => t.online).length,
+      completed: tests.filter(t => t.end && new Date(t.end) < now).length,
+    };
+  }, [tests]);
+
+  // Filter tests based on active tab
+  const filteredTests = React.useMemo(() => {
+    let filtered = [...tests];
+    
+    if (activeTab === 'drafted') {
+      filtered = filtered.filter(t => !t.online);
+    } else if (activeTab === 'online') {
+      filtered = filtered.filter(t => t.online);
+    }
+    
+    return filtered.sort((a, b) => {
+      const aEnd = a.end ? new Date(a.end).getTime() : 0;
+      const bEnd = b.end ? new Date(b.end).getTime() : 0;
+      return bEnd - aEnd;
+    });
+  }, [tests, activeTab]);
+
+  const totalPages = Math.ceil(filteredTests.length / pageSize);
+  const paginatedTests = filteredTests.slice(
     (page - 1) * pageSize,
     page * pageSize
   );
+
+  // Reset page when switching tabs
+  React.useEffect(() => {
+    setPage(1);
+  }, [activeTab]);
 
   const handleDelete = async (id: string) => {
     setActionLoading(id);
@@ -193,10 +288,15 @@ export default function ManageTestsPage() {
   const handlePublish = async (id: string) => {
     setActionLoading(id);
     try {
-      await updateDoc(doc(db, "test", id), { online: true });
+      await updateDoc(doc(db, "test", id), { published: true });
       setTests((prev) =>
         prev.map((t) =>
-          t.id === id ? { ...t, status: "published", online: true } : t
+          t.id === id ? { ...t, published: true } : t
+        )
+      );
+      setAllTests((prev) =>
+        prev.map((t) =>
+          t.id === id ? { ...t, published: true } : t
         )
       );
     } catch (err) {
@@ -206,33 +306,251 @@ export default function ManageTestsPage() {
     }
   };
 
+  // Handler to toggle online status
+  const handleToggleOnline = async (id: string, currentOnline: boolean) => {
+    setActionLoading(id);
+    try {
+      const newOnlineStatus = !currentOnline;
+      await updateDoc(doc(db, "test", id), { online: newOnlineStatus });
+      setTests((prev) =>
+        prev.map((t) =>
+          t.id === id ? { ...t, online: newOnlineStatus } : t
+        )
+      );
+      setAllTests((prev) =>
+        prev.map((t) =>
+          t.id === id ? { ...t, online: newOnlineStatus } : t
+        )
+      );
+    } catch (err) {
+      alert("Failed to update test status.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Handler to generate PDF for test
+  const handleGeneratePDF = async (test: any) => {
+    setPreparePdfTest(test);
+    setPdfLoading(true);
+    try {
+      // Fetch question data from test
+      let questionsData = [];
+      if (test.questions && test.questions.length > 0) {
+        questionsData = await Promise.all(
+          test.questions.map(async (qItem: any, index: number) => {
+            let qSnap;
+            let questionId = null;
+            
+            try {
+              // Handle different question reference formats
+              if (typeof qItem === 'string') {
+                // If it's a string ID, create document reference
+                questionId = qItem;
+                const qRef = doc(db, 'questions', qItem);
+                qSnap = await getDoc(qRef);
+              } else if (qItem && typeof qItem === 'object') {
+                // Handle object formats
+                if (qItem.id) {
+                  // Object with id property
+                  questionId = qItem.id;
+                  const qRef = doc(db, 'questions', qItem.id);
+                  qSnap = await getDoc(qRef);
+                } else if (qItem._path && qItem._path.segments) {
+                  // Firestore DocumentReference object
+                  questionId = qItem._path.segments[qItem._path.segments.length - 1];
+                  const qRef = doc(db, 'questions', questionId);
+                  qSnap = await getDoc(qRef);
+                } else if (qItem.path) {
+                  // Path string
+                  const pathParts = qItem.path.split('/');
+                  questionId = pathParts[pathParts.length - 1];
+                  const qRef = doc(db, 'questions', questionId);
+                  qSnap = await getDoc(qRef);
+                } else if (qItem.referencePath) {
+                  // Handle referencePath format like 'questionCollection/questionId'
+                  const pathParts = qItem.referencePath.split('/');
+                  questionId = pathParts[pathParts.length - 1];
+                  const collectionName = pathParts[0];
+                  console.log(`Processing question ${index} with referencePath:`, questionId, 'from collection:', collectionName);
+                  const qRef = doc(db, collectionName, questionId);
+                  qSnap = await getDoc(qRef);
+                } else {
+                  console.warn('Unknown question reference format:', qItem);
+                  return null;
+                }
+              } else {
+                console.warn('Invalid question reference:', qItem);
+                return null;
+              }
+              
+              if (!qSnap.exists()) {
+                console.warn(`Question document not found: ${questionId}`);
+                return null;
+              }
+            
+            const d = (qSnap.data() as any) || {};
+            return {
+              id: qSnap.id,
+              question: d.questionText || d.question || d.text || "",
+              optionA: d.optionA || d.option_a || d.options?.[0] || "",
+              optionB: d.optionB || d.option_b || d.options?.[1] || "",
+              optionC: d.optionC || d.option_c || d.options?.[2] || "",
+              optionD: d.optionD || d.option_d || d.options?.[3] || "",
+              correct: d.correct || d.correctAnswer || d.answer || "",
+              explanation: d.explanation || "",
+              solution: d.solution || "",
+              difficulty: d.difficulty || "",
+              bloom: d.bloom || "",
+            };
+            } catch (error) {
+              console.error(`Error processing PDF question ${index}:`, error, qItem);
+              return null;
+            }
+          })
+        );
+        
+        // Filter out null results
+        questionsData = questionsData.filter(q => q !== null);
+      }
+      
+      setPdfQuestions(questionsData);
+    } catch (err) {
+      console.error('Error preparing PDF:', err);
+      alert('Failed to prepare PDF.');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  // Helper function to generate PDF content (simplified)
+  const generateTestPDF = (test: any, questions: any[]) => {
+    let content = `Test: ${test.name}\nClass: ${test.className}\nDate: ${formatDate(test.start)}\n\n`;
+    
+    questions.forEach((q, index) => {
+      content += `${index + 1}. ${q.question}\n`;
+      content += `A) ${q.optionA}\n`;
+      content += `B) ${q.optionB}\n`;
+      content += `C) ${q.optionC}\n`;
+      content += `D) ${q.optionD}\n`;
+      content += `Correct: ${q.correct}\n\n`;
+    });
+    
+    return content;
+  };
+
+  // Helper function to find question in different collections
+  const findQuestionInCollections = async (questionId: string) => {
+    const collections = ['question', 'questions', 'Question', 'questionBank', 'QuestionBank'];
+    
+    for (const collectionName of collections) {
+      try {
+        const qRef = doc(db, collectionName, questionId);
+        const qSnap = await getDoc(qRef);
+        if (qSnap.exists()) {
+          console.log(`Found question in '${collectionName}' collection:`, questionId);
+          return qSnap;
+        }
+      } catch (err) {
+        console.log(`Collection '${collectionName}' doesn't exist or no access`);
+      }
+    }
+    return null;
+  };
+
   // Handler to preview test questions
   const handlePreviewQuestions = async (test: any) => {
     setPreviewDialogOpen(test.id);
     try {
       // Fetch question data from test
       let questionsData = [];
+      console.log('Test questions raw data:', test.questions);
+      
       if (test.questions && test.questions.length > 0) {
         questionsData = await Promise.all(
-          test.questions.map(async (qRef: any) => {
-            const qSnap = await getDoc(qRef);
-            const d = (qSnap.data() as any) || {};
-            return {
-              id: qSnap.id,
-              question: d.questionText || d.question || "",
-              optionA: d.optionA || "",
-              optionB: d.optionB || "",
-              optionC: d.optionC || "",
-              optionD: d.optionD || "",
-              correct: d.correct || "",
-              explanation: d.explanation || "",
-              solution: d.solution || "",
-              difficulty: d.difficulty || "",
-              bloom: d.bloom || "",
-            };
+          test.questions.map(async (qItem: any, index: number) => {
+            console.log(`Processing question ${index}:`, qItem);
+            let qSnap;
+            let questionId = null;
+            
+            try {
+              // Handle different question reference formats
+              if (typeof qItem === 'string') {
+                // If it's a string ID, create document reference
+                questionId = qItem;
+                const qRef = doc(db, 'questions', qItem);
+                qSnap = await getDoc(qRef);
+              } else if (qItem && typeof qItem === 'object') {
+                // Handle object formats
+                if (qItem.id) {
+                  // Object with id property
+                  questionId = qItem.id;
+                  const qRef = doc(db, 'questions', qItem.id);
+                  qSnap = await getDoc(qRef);
+                } else if (qItem._path && qItem._path.segments) {
+                  // Firestore DocumentReference object
+                  questionId = qItem._path.segments[qItem._path.segments.length - 1];
+                  const qRef = doc(db, 'questions', questionId);
+                  qSnap = await getDoc(qRef);
+                } else if (qItem.path) {
+                  // Path string
+                  const pathParts = qItem.path.split('/');
+                  questionId = pathParts[pathParts.length - 1];
+                  const qRef = doc(db, 'questions', questionId);
+                  qSnap = await getDoc(qRef);
+                } else if (qItem.referencePath) {
+                  // Handle referencePath format like 'questionCollection/questionId'
+                  const pathParts = qItem.referencePath.split('/');
+                  questionId = pathParts[pathParts.length - 1];
+                  const collectionName = pathParts[0];
+                  console.log(`Processing question ${index} with referencePath:`, questionId, 'from collection:', collectionName);
+                  const qRef = doc(db, collectionName, questionId);
+                  qSnap = await getDoc(qRef);
+                } else {
+                  console.warn('Unknown question reference format:', qItem);
+                  return null;
+                }
+              } else {
+                console.warn('Invalid question reference:', qItem);
+                return null;
+              }
+              
+              if (!qSnap.exists()) {
+                console.warn(`Question document not found: ${questionId}`);
+                return null;
+              }
+              
+              const d = qSnap.data() || {};
+              console.log('Question data from Firestore:', {
+                id: qSnap.id,
+                rawData: d,
+                allFields: Object.keys(d)
+              });
+              
+              return {
+                id: qSnap.id,
+                question: d.questionText || d.question || d.text || "",
+                optionA: d.optionA || d.option_a || d.options?.[0] || "",
+                optionB: d.optionB || d.option_b || d.options?.[1] || "",
+                optionC: d.optionC || d.option_c || d.options?.[2] || "",
+                optionD: d.optionD || d.option_d || d.options?.[3] || "",
+                correct: d.correct || d.correctAnswer || d.answer || "",
+                explanation: d.explanation || "",
+                solution: d.solution || "",
+                difficulty: d.difficulty || "",
+                bloom: d.bloom || "",
+              };
+            } catch (error) {
+              console.error(`Error processing question ${index}:`, error, qItem);
+              return null;
+            }
           })
         );
+        
+        // Filter out null results
+        questionsData = questionsData.filter(q => q !== null);
       }
+      console.log('Final preview questions data:', questionsData);
       setPreviewQuestions(questionsData);
     } catch (err) {
       console.error("Error fetching questions for preview:", err);
@@ -351,209 +669,305 @@ export default function ManageTestsPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-gray-50 font-sans">
+    <div className="min-h-screen flex bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 font-sans">
       <Sidebar />
-      <main className="flex-1 bg-gray-50 flex flex-col items-center p-10">
-        <div className="w-full max-w-5xl">
-          <button
-            className="mb-4 px-4 py-2 rounded bg-gray-200 text-gray-700 font-semibold hover:bg-gray-300"
-            onClick={() => {
-              if (
-                userSchoolId &&
-                typeof userSchoolId === "object" &&
-                "path" in userSchoolId &&
-                "id" in userSchoolId
-              ) {
-                const ref = userSchoolId as any;
-                console.log("Debug schoolId:", ref);
-                alert(
-                  "schoolId path: " + ref.path + "\nschoolId id: " + ref.id
-                );
-              } else {
-                alert("schoolId: " + userSchoolId);
-              }
-            }}
-          >
-            Debug: Show Auth User SchoolID
-          </button>
-          <h1 className="text-3xl font-extrabold text-blue-700 mb-6 text-center">
-            Manage Tests
-          </h1>
-          {error && (
-            <div className="text-red-500 text-center mb-4">{error}</div>
-          )}
-          {loading ? (
-            <div className="flex justify-center items-center h-40">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
+      <main className="flex-1 p-8">
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+              Test Management Dashboard
+            </h1>
+            <p className="text-gray-600 text-lg">
+              Manage and organize your assessment tests
+            </p>
+          </div>
+
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 border border-white/20 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 text-sm font-medium">Total Tests</p>
+                  <p className="text-3xl font-bold text-gray-800">{stats.total}</p>
+                </div>
+                <div className="p-3 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl">
+                  <ChartBarIcon className="h-8 w-8 text-white" />
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {paginatedTests.map(
-                (test: {
-                  id: string;
-                  name: string;
-                  className: string;
-                  start: any;
-                  end: any;
-                  status: keyof typeof pastelStatus;
-                  online?: boolean;
-                  questions?: any[];
-                  totalQuestions?: number | null;
-                }) => (
-                  <div
-                    key={test.id}
-                    className="bg-white/80 rounded-2xl shadow p-6 border border-blue-100 flex flex-col gap-3 relative"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="text-xl font-bold text-blue-800">
-                        {test.name}
+
+            <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 border border-white/20 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 text-sm font-medium">Online</p>
+                  <p className="text-3xl font-bold text-gray-800">{stats.online}</p>
+                </div>
+                <div className="p-3 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-2xl">
+                  <CheckCircleIcon className="h-8 w-8 text-white" />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 border border-white/20 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 text-sm font-medium">Drafted</p>
+                  <p className="text-3xl font-bold text-gray-800">{stats.drafted}</p>
+                </div>
+                <div className="p-3 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl">
+                  <DocumentTextIcon className="h-8 w-8 text-white" />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 border border-white/20 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 text-sm font-medium">Completed</p>
+                  <p className="text-3xl font-bold text-gray-800">{stats.completed}</p>
+                </div>
+                <div className="p-3 bg-gradient-to-br from-blue-400 to-cyan-500 rounded-2xl">
+                  <ClockIcon className="h-8 w-8 text-white" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-2 mb-8 border border-white/20 shadow-lg">
+            <div className="flex space-x-2">
+              <button
+                className={`flex-1 py-3 px-6 rounded-2xl font-semibold transition-all duration-200 ${
+                  activeTab === 'all'
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
+                    : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                }`}
+                onClick={() => setActiveTab('all')}
+              >
+                All Tests ({stats.total})
+              </button>
+              <button
+                className={`flex-1 py-3 px-6 rounded-2xl font-semibold transition-all duration-200 ${
+                  activeTab === 'drafted'
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
+                    : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                }`}
+                onClick={() => setActiveTab('drafted')}
+              >
+                Drafted ({stats.drafted})
+              </button>
+              <button
+                className={`flex-1 py-3 px-6 rounded-2xl font-semibold transition-all duration-200 ${
+                  activeTab === 'online'
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
+                    : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                }`}
+                onClick={() => setActiveTab('online')}
+              >
+                Online ({stats.online})
+              </button>
+            </div>
+          </div>
+          {/* Tests Section */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-8 border border-white/20 shadow-lg">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-800">
+                {activeTab === 'all' ? 'All Tests' : activeTab === 'drafted' ? 'Drafted Tests' : 'Online Tests'}
+              </h2>
+              <div className="text-sm text-gray-600">
+                Showing {paginatedTests.length} of {filteredTests.length} tests
+              </div>
+            </div>
+
+            {error && (
+              <div className="text-red-500 text-center mb-4 p-4 bg-red-50 rounded-2xl">{error}</div>
+            )}
+            
+            {loading ? (
+              <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-200 border-t-blue-600"></div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {paginatedTests.length > 0 ? (
+                  paginatedTests.map((test: any) => (
+                    <div
+                      key={test.id}
+                      className="bg-white/90 backdrop-blur-sm rounded-2xl p-6 border border-white/30 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02]"
+                    >
+                      {/* Test Header */}
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex-1">
+                          <h3 className="text-xl font-bold text-gray-800 mb-2">{test.name}</h3>
+                          <div className="flex items-center gap-4 text-sm text-gray-600">
+                            <div className="flex items-center gap-1">
+                              <DocumentTextIcon className="h-4 w-4" />
+                              <span>Class: {test.className}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <ClockIcon className="h-4 w-4" />
+                              <span>Questions: {test.questions ? test.questions.length : 0}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                            test.online 
+                              ? 'bg-green-100 text-green-700' 
+                              : 'bg-gray-100 text-gray-700'
+                          }`}>
+                            {test.online ? 'Online' : 'Offline'}
+                          </span>
+                        </div>
                       </div>
-                      {/* Status badge: revert to original logic and styling */}
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                          pastelStatus[test.status] || pastelStatus.drafted
-                        }`}
-                      >
-                        {test.status.charAt(0).toUpperCase() +
-                          test.status.slice(1)}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-4 text-sm text-blue-900">
-                      <div>
-                        <span className="font-semibold">Class:</span>{" "}
-                        {test.className}
+
+                      {/* Test Details */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-50/50 rounded-xl">
+                        <div>
+                          <span className="text-sm font-medium text-gray-500">Start Date</span>
+                          <p className="text-gray-800 font-medium">
+                            {test.start ? formatDate(test.start) : '-'}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-gray-500">End Date</span>
+                          <p className="text-gray-800 font-medium">
+                            {test.end ? formatDate(test.end) : '-'}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <span className="font-semibold">Start:</span>{" "}
-                        {test.start
-                          ? new Date(test.start).toLocaleString()
-                          : "-"}
-                      </div>
-                      <div>
-                        <span className="font-semibold">End:</span>{" "}
-                        {test.end ? new Date(test.end).toLocaleString() : "-"}
-                      </div>
-                      <div>
-                        <span className="font-semibold">Questions:</span>{" "}
-                        {test.questions ? test.questions.length : 0}
-                        {typeof test.totalQuestions === "number"
-                          ? ` / ${test.totalQuestions}`
-                          : ""}
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-2 mt-2 items-center">
-                      {/* First row: Three buttons */}
-                      <div className="flex flex-wrap gap-3 w-full justify-start">
+                      {/* Action Buttons */}
+                      <div className="grid grid-cols-3 gap-2">
                         <button
-                          className="px-4 py-2 rounded-xl font-semibold shadow-sm border border-blue-200 bg-white text-blue-700 hover:bg-blue-50 focus:ring-2 focus:ring-blue-200 transition"
+                          className="flex items-center justify-center gap-1 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-semibold transition-all duration-200 hover:scale-105 text-sm"
                           onClick={() => setSelectDialogOpen(test.id)}
+                          disabled={actionLoading === test.id}
                         >
-                          Select Questions
-                        </button>
-                        <button
-                          className="px-4 py-2 rounded-xl font-semibold shadow-sm border border-green-200 bg-white text-green-700 hover:bg-green-50 focus:ring-2 focus:ring-green-200 transition flex items-center gap-2"
-                          onClick={() => handlePreviewQuestions(test)}
-                          disabled={!test.questions || test.questions.length === 0}
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                           </svg>
+                          Select
+                        </button>
+                        
+                        <button
+                          className="flex items-center justify-center gap-1 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-semibold transition-all duration-200 hover:scale-105 text-sm"
+                          onClick={() => handlePreviewQuestions(test)}
+                          disabled={!test.questions || test.questions.length === 0 || actionLoading === test.id}
+                        >
+                          <EyeIcon className="h-4 w-4" />
                           Preview
                         </button>
+                        
                         <button
-                          className="px-4 py-2 rounded-xl font-semibold shadow-sm border border-purple-200 bg-white text-purple-700 hover:bg-purple-50 focus:ring-2 focus:ring-purple-200 transition"
-                          onClick={() => handlePreparePdf(test)}
+                          className="flex items-center justify-center gap-1 px-3 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg font-semibold transition-all duration-200 hover:scale-105 text-sm"
+                          onClick={() => router.push(`/assessment-question-bank/assessments/edit-test?id=${test.id}`)}
+                          disabled={actionLoading === test.id}
                         >
-                          Prepare PDF
+                          <PencilIcon className="h-4 w-4" />
+                          Edit
                         </button>
-                      </div>
-                      {/* Horizontal divider */}
-                      <hr className="my-2 border-gray-200 w-full" />
-                      {/* Second row: Last two buttons (Publish, Delete) */}
-                      <div className="flex flex-wrap gap-3 w-full justify-start">
+                        
                         <button
-                          className={`px-4 py-2 rounded-xl font-semibold shadow-sm border transition ${
+                          className={`flex items-center justify-center gap-1 px-3 py-2 rounded-lg font-semibold transition-all duration-200 hover:scale-105 text-sm ${
                             test.online
-                              ? "bg-blue-900 text-white border-blue-900 cursor-default"
-                              : "border-pink-200 bg-white text-pink-700 hover:bg-pink-50 focus:ring-2 focus:ring-pink-200"
+                              ? 'bg-orange-50 hover:bg-orange-100 text-orange-700'
+                              : 'bg-green-50 hover:bg-green-100 text-green-700'
                           }`}
-                          onClick={() => handlePublish(test.id)}
-                          disabled={test.online || actionLoading === test.id}
-                        >
-                          {actionLoading === test.id ? (
-                            <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white inline-block mr-2"></span>
-                          ) : null}
-                          {test.online ? "Published" : "Publish"}
-                        </button>
-                        <button
-                          className="px-4 py-2 rounded-xl font-semibold shadow-sm border border-red-200 bg-white text-red-700 hover:bg-red-50 focus:ring-2 focus:ring-red-200 transition"
-                          onClick={() => setConfirmDeleteId(test.id)}
+                          onClick={() => handleToggleOnline(test.id, test.online)}
                           disabled={actionLoading === test.id}
                         >
                           {actionLoading === test.id ? (
-                            <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-400 inline-block mr-2"></span>
-                          ) : null}
+                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent"></div>
+                          ) : test.online ? (
+                            <EyeSlashIcon className="h-4 w-4" />
+                          ) : (
+                            <EyeIcon className="h-4 w-4" />
+                          )}
+                          {test.online ? 'Offline' : 'Online'}
+                        </button>
+                        
+                        <button
+                          className="flex items-center justify-center gap-1 px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg font-semibold transition-all duration-200 hover:scale-105 text-sm"
+                          onClick={() => handleGeneratePDF(test)}
+                          disabled={actionLoading === test.id}
+                        >
+                          {actionLoading === test.id ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent"></div>
+                          ) : (
+                            <DocumentArrowDownIcon className="h-4 w-4" />
+                          )}
+                          PDF
+                        </button>
+                        
+                        <button
+                          className="flex items-center justify-center gap-1 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg font-semibold transition-all duration-200 hover:scale-105 text-sm"
+                          onClick={() => setConfirmDeleteId(test.id)}
+                          disabled={actionLoading === test.id}
+                        >
+                          <TrashIcon className="h-4 w-4" />
                           Delete
                         </button>
                       </div>
+                      {/* Question Selection Dialog for this test */}
+                      {selectDialogOpen === test.id && (
+                        <QuestionSelectionDialog
+                          open={true}
+                          onClose={() => setSelectDialogOpen(null)}
+                          onUpdate={async (selected: string[]) => {
+                            setSelectedQuestions((prev) => ({
+                              ...prev,
+                              [test.id]: selected,
+                            }));
+                            setSelectDialogOpen(null);
+                            // Refresh the test data to show updated question count
+                            await refreshTestData(test.id);
+                          }}
+                          initialSelected={selectedQuestions[test.id] || []}
+                          schoolId={userSchoolId}
+                          testId={doc(db, "test", test.id)}
+                          onRefreshTest={() => refreshTestData(test.id)}
+                        />
+                      )}
                     </div>
-                    {/* QuestionSelectionDialog for this test */}
-                    {selectDialogOpen === test.id && (
-                      <QuestionSelectionDialog
-                        open={true}
-                        onClose={() => setSelectDialogOpen(null)}
-                        onUpdate={async (selected: string[]) => {
-                          setSelectedQuestions((prev) => ({
-                            ...prev,
-                            [test.id]: selected,
-                          }));
-                          setSelectDialogOpen(null);
-                          // Refresh the test data to show updated question count
-                          await refreshTestData(test.id);
-                        }}
-                        initialSelected={selectedQuestions[test.id] || []}
-                        schoolId={userSchoolId}
-                        testId={doc(db, "test", test.id)}
-                        onRefreshTest={() => refreshTestData(test.id)}
-                      />
+                  ))
+                ) : (
+                  <div className="text-center py-16">
+                    <DocumentTextIcon className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-600 mb-2">
+                      No tests found
+                    </h3>
+                    <p className="text-gray-500">
+                      {allTests.length === 0
+                        ? "Create your first test to get started"
+                        : "Tests may be filtered by school or online status"
+                      }
+                    </p>
+                    {allTests.length > 0 && (
+                      <div className="mt-4 text-xs text-gray-400">
+                        <p>Debug info: Total tests: {allTests.length}, User school: {userSchoolId || 'Not set'}</p>
+                      </div>
                     )}
                   </div>
-                )
-              )}
-
-              {/* Test Preview Dialog */}
-              {previewDialogOpen && (
-                <TestPreviewDialog
-                  open={true}
-                  onClose={() => setPreviewDialogOpen(null)}
-                  questions={previewQuestions}
-                  testId={previewDialogOpen}
-                  onRefreshTest={() => refreshTestData(previewDialogOpen)}
-                />
-              )}
-              {tests.length === 0 && (
-                <div className="col-span-full text-center text-blue-400 py-10">
-                  No tests found.
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            )}
+          
           {/* Pagination Controls */}
           {totalPages > 1 && (
             <div className="flex justify-center items-center gap-4 mt-8">
               <button
-                className="px-4 py-2 rounded-lg font-semibold border border-blue-200 bg-white text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                className="px-6 py-3 rounded-xl font-semibold bg-white/80 backdrop-blur-sm text-gray-700 border border-white/20 hover:bg-white/90 disabled:opacity-50 transition-all duration-200 hover:scale-105 shadow-lg"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
               >
                 Previous
               </button>
-              <span className="text-blue-700 font-medium">
+              <span className="px-4 py-3 bg-white/80 backdrop-blur-sm rounded-xl text-gray-700 font-semibold border border-white/20 shadow-lg">
                 Page {page} of {totalPages}
               </span>
               <button
-                className="px-4 py-2 rounded-lg font-semibold border border-blue-200 bg-white text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                className="px-6 py-3 rounded-xl font-semibold bg-white/80 backdrop-blur-sm text-gray-700 border border-white/20 hover:bg-white/90 disabled:opacity-50 transition-all duration-200 hover:scale-105 shadow-lg"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
               >
@@ -562,33 +976,49 @@ export default function ManageTestsPage() {
             </div>
           )}
         </div>
+
+        {/* Test Preview Dialog */}
+        {previewDialogOpen && (
+          <TestPreviewDialog
+            open={true}
+            onClose={() => setPreviewDialogOpen(null)}
+            questions={previewQuestions}
+            testId={previewDialogOpen}
+            onRefreshTest={() => refreshTestData(previewDialogOpen)}
+          />
+        )}
+        </div>
       </main>
       {/* Delete Confirmation Modal */}
       {confirmDeleteId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/60 backdrop-blur-md">
-          <div className="bg-white/90 rounded-2xl shadow-2xl p-8 w-full max-w-md relative border border-blue-100 flex flex-col items-center">
-            <h2 className="text-2xl font-bold text-red-700 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
+          <div className="bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl p-8 w-full max-w-md relative border border-white/20 flex flex-col items-center">
+            <div className="p-4 bg-red-50 rounded-2xl mb-6">
+              <TrashIcon className="h-12 w-12 text-red-500 mx-auto" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">
               Delete Test?
             </h2>
-            <p className="text-blue-700 mb-6 text-center">
-              Are you sure you want to delete this test? This action cannot be
-              undone.
+            <p className="text-gray-600 mb-8 text-center">
+              Are you sure you want to delete this test? This action cannot be undone.
             </p>
-            <div className="flex gap-4">
+            <div className="flex gap-4 w-full">
               <button
-                className="px-6 py-2 rounded-xl font-bold shadow-sm border border-gray-200 bg-white text-gray-700 hover:bg-gray-100 focus:ring-2 focus:ring-gray-200 transition"
+                className="flex-1 px-6 py-3 rounded-2xl font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all duration-200 hover:scale-105"
                 onClick={() => setConfirmDeleteId(null)}
               >
                 Cancel
               </button>
               <button
-                className="px-6 py-2 rounded-xl font-bold shadow-sm border border-red-200 bg-red-600 text-white hover:bg-red-700 focus:ring-2 focus:ring-red-200 transition"
+                className="flex-1 px-6 py-3 rounded-2xl font-semibold bg-red-500 text-white hover:bg-red-600 transition-all duration-200 hover:scale-105 flex items-center justify-center gap-2"
                 onClick={() => handleDelete(confirmDeleteId)}
                 disabled={actionLoading === confirmDeleteId}
               >
                 {actionLoading === confirmDeleteId ? (
-                  <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white inline-block mr-2"></span>
-                ) : null}
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white/30 border-t-white"></div>
+                ) : (
+                  <TrashIcon className="h-5 w-5" />
+                )}
                 Delete
               </button>
             </div>
