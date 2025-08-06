@@ -43,11 +43,11 @@ export default function SchoolSidebar() {
           </button>
         </div>
         
-        <div className="flex items-center justify-center mb-8">
+        <div className="flex items-center justify-left mb-4">
           <img
-            src="/assets/images/edueronLogo.png"
-            alt="Edueron Logo"
-            className="object-contain h-16 w-32"
+            src="/assets/images/classa logo.png"
+            alt="Classa Logo"
+            className="object-contain h-22 w-46"
           />
         </div>
 

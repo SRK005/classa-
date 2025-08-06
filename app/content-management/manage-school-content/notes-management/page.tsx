@@ -6,6 +6,7 @@ import { collection, query, where, getDocs, doc, getDoc, orderBy } from "firebas
 import { auth } from "../../../../components/firebase";
 
 export default function NotesManagement() {
+  // All useState declarations (MUST be at the top)
   const [notes, setNotes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -17,13 +18,26 @@ export default function NotesManagement() {
   const [selectedSubject, setSelectedSubject] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [classes, setClasses] = useState<any[]>([]);
+  // Subjects for main page filter
   const [subjects, setSubjects] = useState<any[]>([]);
-  const [loadingClasses, setLoadingClasses] = useState(false);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
+  // Subjects for upload modal filter
+  const [uploadSubjects, setUploadSubjects] = useState<any[]>([]);
+  const [loadingUploadSubjects, setLoadingUploadSubjects] = useState(false);
+  const [loadingClasses, setLoadingClasses] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  // Filter state
+  const [filterClass, setFilterClass] = useState<string>("");
+  const [filterSubject, setFilterSubject] = useState<string>("");
+  // Client-only render guard
+  const [hasMounted, setHasMounted] = useState(false);
+  useEffect(() => { setHasMounted(true); }, []);
 
-  // Fetch classes for the logged-in user's school
+  // All useEffect hooks below here
+
+
+  // Fetch classes for the logged-in user's school (always on mount)
   useEffect(() => {
     async function fetchClasses() {
       setLoadingClasses(true);
@@ -40,22 +54,53 @@ export default function NotesManagement() {
       } catch {}
       setLoadingClasses(false);
     }
-    if (showModal) fetchClasses();
-  }, [showModal]);
+    fetchClasses();
+  }, []);
 
-  // Fetch subjects for the selected class
+  // Fetch subjects for the main page filter
   useEffect(() => {
-    async function fetchSubjects() {
+    async function fetchSubjectsForMainPage() {
       setLoadingSubjects(true);
       try {
-        if (!selectedClass) return;
-        const q = query(collection(db, "subjects"), where("classID", "==", doc(db, "classes", selectedClass)));
+        if (!filterClass) {
+          setSubjects([]);
+          setLoadingSubjects(false);
+          return;
+        }
+        const classRef = doc(db, "classes", filterClass);
+        const q = query(
+          collection(db, "subjects"),
+          where("assClass", "array-contains", classRef)
+        );
         const snap = await getDocs(q);
         setSubjects(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       } catch {}
       setLoadingSubjects(false);
     }
-    if (selectedClass) fetchSubjects();
+    fetchSubjectsForMainPage();
+  }, [filterClass]);
+
+  // Fetch subjects for the upload modal filter
+  useEffect(() => {
+    async function fetchSubjectsForUploadModal() {
+      setLoadingUploadSubjects(true);
+      try {
+        if (!selectedClass) {
+          setUploadSubjects([]);
+          setLoadingUploadSubjects(false);
+          return;
+        }
+        const classRef = doc(db, "classes", selectedClass);
+        const q = query(
+          collection(db, "subjects"),
+          where("assClass", "array-contains", classRef)
+        );
+        const snap = await getDocs(q);
+        setUploadSubjects(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch {}
+      setLoadingUploadSubjects(false);
+    }
+    fetchSubjectsForUploadModal();
   }, [selectedClass]);
 
   useEffect(() => {
@@ -63,10 +108,18 @@ export default function NotesManagement() {
       setLoading(true);
       setError(null);
       try {
-        // Fetch notes (contents where video == false), no orderBy
+        // Fetch user doc to get schoolId
+        const user = auth.currentUser;
+        if (!user) return;
+        const userSnap = await getDoc(doc(db, "users", user.uid));
+        const schoolID = userSnap.exists() ? userSnap.data().schoolId : null;
+        if (!schoolID) return;
+
+        // Fetch notes (contents where video == false and schoolID matches)
         const q = query(
           collection(db, "contents"),
-          where("video", "==", false)
+          where("video", "==", false),
+          where("schoolID", "==", schoolID)
         );
         const snap = await getDocs(q);
         const notesData = await Promise.all(
@@ -196,6 +249,17 @@ export default function NotesManagement() {
     }
   }
 
+
+  // Now, after all state and effects are declared, compute filteredNotes
+  const filteredNotes = notes.filter((note: any) => {
+    if (filterClass && note.className !== (classes.find((c: any) => c.id === filterClass)?.name || "")) return false;
+    if (filterSubject && note.subjectName !== (subjects.find((s: any) => s.id === filterSubject)?.name || "")) return false;
+    return true;
+  });
+
+  // Prevent hydration mismatch: only render after client mount
+  if (!hasMounted) return null;
+
   return (
     <div className="min-h-screen flex bg-gray-50 font-sans">
       <ContentSidebar />
@@ -204,7 +268,7 @@ export default function NotesManagement() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
           {/* Notes Count */}
           <div className="bg-white/80 backdrop-blur-md rounded-2xl p-8 shadow flex flex-col items-center border border-gray-100">
-            <div className="text-4xl font-bold text-blue-700 mb-2">{loading ? "-" : notes.length}</div>
+            <div className="text-4xl font-bold text-blue-700 mb-2">{loading ? "-" : filteredNotes.length}</div>
             <div className="text-gray-600">Total Notes Uploaded</div>
           </div>
           {/* Upload New Notes */}
@@ -212,6 +276,40 @@ export default function NotesManagement() {
             <button className="bg-blue-600 text-white px-8 py-3 rounded-xl font-semibold shadow hover:bg-blue-700 transition text-lg mb-2" onClick={() => setShowModal(true)}>Upload New Notes</button>
             <div className="text-gray-600">Upload PDF or document notes for your classes.</div>
           </div>
+        </div>
+        {/* Filters */}
+        <div className="flex gap-4 mb-8">
+          <select
+            value={filterClass}
+            onChange={e => {
+              setFilterClass(e.target.value);
+              setFilterSubject(""); // Reset subject filter when class changes
+            }}
+            className="border rounded px-3 py-2"
+            disabled={loadingClasses}
+          >
+            <option value="">All Classes</option>
+            {/* Only show classes belonging to the user's school (already filtered in classes state) */}
+            {classes.map((cls: any) => (
+              <option key={cls.id} value={cls.id}>{cls.name}</option>
+            ))}
+          </select>
+          {/* Subject filter only appears after a class is selected */}
+          {filterClass && (
+            <select
+              value={filterSubject}
+              onChange={e => setFilterSubject(e.target.value)}
+              className="border rounded px-3 py-2"
+              disabled={!filterClass || loadingSubjects}
+            >
+              <option value="">All Subjects</option>
+              {subjects.length === 0 && <option disabled>No subjects found for this class</option>}
+              {subjects.map((sub: any) => (
+                <option key={sub.id} value={sub.id}>{sub.name}</option>
+              ))}
+            </select>
+          )}
+
         </div>
         {/* Upload Modal */}
         {showModal && (
@@ -248,33 +346,43 @@ export default function NotesManagement() {
                   <form className="flex flex-col gap-6">
                     {/* Class/Subject Row */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Upload Modal Class Dropdown */}
                       <div className="relative">
-                        <label className="block text-gray-700 font-semibold mb-1">Class</label>
                         <select
-                          className="w-full bg-gray-50/80 backdrop-blur border border-blue-100 rounded-xl px-5 py-3 text-base font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 shadow appearance-none"
                           value={selectedClass}
-                          onChange={e => setSelectedClass(e.target.value)}
+                          onChange={e => {
+                            setSelectedClass(e.target.value);
+                            setSelectedSubject(""); // Reset subject when class changes
+                          }}
+                          className="border rounded px-3 py-2 w-full"
+                          disabled={loadingClasses}
                         >
                           <option value="">Select Class</option>
-                          {loadingClasses ? <option>Loading...</option> : classes.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          {classes.map((cls: any) => (
+                            <option key={cls.id} value={cls.id}>{cls.name}</option>
+                          ))}
                         </select>
-                        <span className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-blue-200">▼</span>
                       </div>
+                      {/* Upload Modal Subject Dropdown */}
                       <div className="relative">
-                        <label className="block text-gray-700 font-semibold mb-1">Subject</label>
-                        <select
-                          className="w-full bg-gray-50/80 backdrop-blur border border-blue-100 rounded-xl px-5 py-3 text-base font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 shadow appearance-none"
-                          value={selectedSubject}
-                          onChange={e => setSelectedSubject(e.target.value)}
-                          disabled={!selectedClass}
-                        >
-                          <option value="">Select Subject</option>
-                          {loadingSubjects ? <option>Loading...</option> : subjects.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                        </select>
-                        <span className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-blue-200">▼</span>
+                        {selectedClass && (
+                          <select
+                            value={selectedSubject}
+                            onChange={e => setSelectedSubject(e.target.value)}
+                            className="border rounded px-3 py-2 w-full"
+                            disabled={!selectedClass || loadingUploadSubjects}
+                          >
+                            <option value="">Select Subject</option>
+                            {uploadSubjects.length === 0 && <option disabled>No subjects found for this class</option>}
+                            {uploadSubjects.map((sub: any) => (
+                              <option key={sub.id} value={sub.id}>{sub.name}</option>
+                            ))}
+                          </select>
+                        )}
                       </div>
+
                     </div>
-                    {/* Title */}
+                    {/* Title */}``
                     <div className="relative">
                       <label className="block text-gray-700 font-semibold mb-1">Title</label>
                       <input
@@ -322,44 +430,48 @@ export default function NotesManagement() {
           <div className="text-center text-red-500 text-lg">{error}</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {notes.map(note => (
-              <div key={note.id} className="bg-white/90 backdrop-blur-md rounded-2xl p-6 shadow flex flex-col border border-gray-100">
-                <div className="font-bold text-lg text-blue-800 mb-1">{note.title}</div>
-                <div className="text-gray-600 mb-2">{note.description}</div>
-                <div className="flex gap-4 mb-4">
-                  <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold">{note.className}</span>
-                  <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-semibold">{note.subjectName}</span>
-                </div>
-                {/* Download and Delete buttons in one row */}
-                <div className="flex gap-3 mt-auto">
-                  <a
-                    href={note.downloadUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-blue-500 text-white px-4 py-2 rounded-lg font-semibold shadow hover:bg-blue-600 transition text-center"
-                  >
-                    Download
-                  </a>
-                  <button
-                    className="bg-red-100 text-red-600 px-4 py-2 rounded-lg font-semibold shadow hover:bg-red-200 transition text-center border border-red-200"
-                    style={{ color: '#d9534f' }}
-                    onClick={async () => {
-                      if (window.confirm(`Are you sure you want to delete the note: ${note.title}?`)) {
-                        try {
-                          const { deleteDoc } = await import("firebase/firestore");
-                          await deleteDoc(doc(db, "contents", note.id));
-                          setNotes(notes => notes.filter(n => n.id !== note.id));
-                        } catch (e) {
-                          alert("Failed to delete note.");
+            {filteredNotes.length === 0 ? (
+              <div className="col-span-3 text-center text-gray-400 text-lg">No notes found for the selected filter.</div>
+            ) : (
+              filteredNotes.map(note => (
+                <div key={note.id} className="bg-white/90 backdrop-blur-md rounded-2xl p-6 shadow flex flex-col border border-gray-100">
+                  <div className="font-bold text-lg text-blue-800 mb-1">{note.title}</div>
+                  <div className="text-gray-600 mb-2">{note.description}</div>
+                  <div className="flex gap-4 mb-4">
+                    <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold">{note.className}</span>
+                    <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-semibold">{note.subjectName}</span>
+                  </div>
+                  {/* Download and Delete buttons in one row */}
+                  <div className="flex gap-3 mt-auto">
+                    <a
+                      href={note.downloadUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bg-blue-500 text-white px-4 py-2 rounded-lg font-semibold shadow hover:bg-blue-600 transition text-center"
+                    >
+                      Download
+                    </a>
+                    <button
+                      className="bg-red-100 text-red-600 px-4 py-2 rounded-lg font-semibold shadow hover:bg-red-200 transition text-center border border-red-200"
+                      style={{ color: '#d9534f' }}
+                      onClick={async () => {
+                        if (window.confirm(`Are you sure you want to delete the note: ${note.title}?`)) {
+                          try {
+                            const { deleteDoc } = await import("firebase/firestore");
+                            await deleteDoc(doc(db, "contents", note.id));
+                            setNotes(notes => notes.filter(n => n.id !== note.id));
+                          } catch (e) {
+                            alert("Failed to delete note.");
+                          }
                         }
-                      }
-                    }}
-                  >
-                    Delete
-                  </button>
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
       </main>

@@ -117,7 +117,7 @@ export default function ClassaScreen() {
       <div className="w-full max-w-6xl px-2 sm:px-4 md:px-8 py-6 md:py-10 mx-auto">
         {/* Header Row */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-          <img src="/assets/images/edueronLogo.png" alt="Logo" className="h-12 w-auto" />
+          <img src="/assets/images/classa logo.png" alt="Logo" className="h-12 w-auto" />
           <div className="text-right">
             <div className="text-base sm:text-lg md:text-xl font-semibold text-gray-700">Hi, {userName} 👋</div>
             <div className="text-sm sm:text-base md:text-lg font-medium text-gray-500 mt-2">Please Select The Required Module!</div>

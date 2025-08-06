@@ -25,13 +25,13 @@ export default function ContentSidebar() {
     <aside className="flex flex-col justify-between bg-white w-64 min-h-screen px-4 py-8 border-r border-gray-200 shadow-sm">
       <div>
         <div
-          className="flex items-center justify-center cursor-pointer select-none mb-4"
+          className="flex items-center justify-left cursor-pointer select-none mb-2"
           onClick={() => router.push("/classaScreen")}
         >
           <img 
-            src="/assets/images/edueronLogo.png" 
+            src="/assets/images/classa logo.png" 
             alt="Edueron Logo" 
-            className="object-contain h-25 w-40" 
+            className="object-contain h-22 w-46" 
           />
         </div>
         <nav className="flex flex-col gap-2">
