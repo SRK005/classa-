@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -73,6 +73,7 @@ const navItems: NavItem[] = [
 export default function LearningManagementSidebar() {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
 
   const handleSignOut = async () => {
@@ -85,15 +86,27 @@ export default function LearningManagementSidebar() {
   };
 
   const toggleExpanded = (itemName: string) => {
-    setExpandedItems(prev => 
-      prev.includes(itemName) 
+    setExpandedItems(prev =>
+      prev.includes(itemName)
         ? prev.filter(name => name !== itemName)
         : [...prev, itemName]
     );
   };
 
   const isActiveItem = (href: string) => {
-    return pathname === href || pathname.startsWith(href + "/");
+    const [hrefPath, hrefQuery] = href.split('?');
+
+    if (pathname !== hrefPath) {
+        return false;
+    }
+
+    const currentQuery = searchParams.toString();
+
+    if (!hrefQuery) {
+        return currentQuery === '';
+    }
+
+    return currentQuery === hrefQuery;
   };
 
   const isParentActive = (item: NavItem) => {
@@ -105,38 +118,28 @@ export default function LearningManagementSidebar() {
   };
 
   return (
-    <aside className="h-screen w-72 bg-white border-r border-gray-200 shadow-sm flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="p-6 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#007dc6] rounded-lg flex items-center justify-center">
-              <FontAwesomeIcon icon={faGraduationCap} className="text-white text-lg" />
-            </div>
-            <div>
-              <h2 className="text-gray-900 font-bold text-lg">Learning</h2>
-              <p className="text-gray-600 text-sm">Management</p>
-            </div>
-          </div>
-          <button
-            onClick={() => router.push("/classaScreen")}
-            className="p-2 text-gray-500 hover:text-[#007dc6] hover:bg-blue-50 rounded-lg transition-all duration-200"
-            title="Back to Main"
-          >
-            <FontAwesomeIcon icon={faArrowLeft} />
-          </button>
+    <aside className="flex flex-col justify-between bg-white w-64 min-h-screen px-4 py-8 border-r border-gray-200 shadow-sm">
+      <div>
+        <div className="flex items-center justify-left mb-4">
+          <img
+            src="/assets/images/classa logo.png"
+            alt="Classa Logo"
+            className="object-contain h-22 w-46"
+          />
         </div>
-      </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 p-4 overflow-y-auto">
-        <div className="space-y-2">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold text-gray-800 mb-2">Learning Management</h2>
+          <p className="text-sm text-gray-600">Manage subjects, lessons, and content</p>
+        </div>
+
+        <nav className="flex flex-col gap-2">
           {navItems.map((item) => (
-            <div key={item.name} className="group">
+            <div key={item.name}>
               <div
-                className={`flex items-center justify-between p-3 rounded-xl transition-all duration-200 cursor-pointer ${
+                className={`flex items-center justify-between gap-4 px-4 py-3 rounded-xl transition font-medium text-base cursor-pointer ${
                   isParentActive(item)
-                    ? "bg-blue-50 text-[#007dc6] font-bold shadow-sm"
+                    ? "bg-blue-50 text-[#007dc6] font-bold"
                     : "text-gray-700 hover:bg-blue-50 hover:text-[#007dc6]"
                 }`}
                 onClick={() => {
@@ -147,58 +150,35 @@ export default function LearningManagementSidebar() {
                   }
                 }}
               >
-                <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
-                    isParentActive(item) 
-                      ? "bg-[#007dc6] text-white" 
-                      : "bg-gray-100 text-gray-600 group-hover:bg-blue-100 group-hover:text-[#007dc6]"
-                  }`}>
-                    <FontAwesomeIcon icon={item.icon} className="text-sm" />
-                  </div>
-                  <span className="font-medium text-sm">{item.name}</span>
+                <div className="flex items-center gap-4">
+                  <FontAwesomeIcon icon={item.icon} className="text-lg" />
+                  {item.name}
                 </div>
-                
                 {item.subItems && (
                   <FontAwesomeIcon
                     icon={expandedItems.includes(item.name) ? faChevronDown : faChevronRight}
-                    className={`text-xs transition-transform duration-200 ${
-                      expandedItems.includes(item.name) ? "rotate-0" : "rotate-0"
-                    }`}
+                    className={`text-xs transition-transform duration-200`}
                   />
                 )}
               </div>
 
-              {/* Sub Items */}
               {item.subItems && (
                 <div className={`overflow-hidden transition-all duration-300 ${
-                  expandedItems.includes(item.name) 
-                    ? "max-h-96 opacity-100 mt-2" 
-                    : "max-h-0 opacity-0"
+                  expandedItems.includes(item.name) ? "max-h-96 mt-2" : "max-h-0"
                 }`}>
-                  <div className="ml-6 space-y-1">
+                  <div className="ml-8 flex flex-col gap-1">
                     {item.subItems.map((subItem) => (
                       <Link
                         key={subItem.name}
                         href={subItem.href}
-                        className={`flex items-center gap-3 p-2 rounded-lg transition-all duration-200 text-sm ${
+                        className={`flex items-center gap-3 px-3 py-2 rounded-lg transition font-normal text-sm ${
                           isActiveItem(subItem.href)
-                            ? "bg-[#007dc6] text-white shadow-sm"
+                            ? "bg-blue-50 text-[#007dc6]"
                             : "text-gray-600 hover:bg-blue-50 hover:text-[#007dc6]"
                         }`}
                       >
-                        <div className={`w-6 h-6 rounded-md flex items-center justify-center ${
-                          isActiveItem(subItem.href)
-                            ? "bg-blue-500"
-                            : "bg-gray-200"
-                        }`}>
-                          <FontAwesomeIcon icon={subItem.icon} className="text-xs" />
-                        </div>
-                        <span>{subItem.name}</span>
-                        {subItem.badge && (
-                          <span className="ml-auto bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                            {subItem.badge}
-                          </span>
-                        )}
+                        <FontAwesomeIcon icon={subItem.icon} className="text-base" />
+                        {subItem.name}
                       </Link>
                     ))}
                   </div>
@@ -206,21 +186,16 @@ export default function LearningManagementSidebar() {
               )}
             </div>
           ))}
-        </div>
-      </nav>
-
-      {/* Footer */}
-      <div className="p-4 border-t border-gray-200">
-        <button
-          onClick={handleSignOut}
-          className="w-full flex items-center gap-3 p-3 text-gray-700 hover:text-[#007dc6] hover:bg-blue-50 rounded-xl transition-all duration-200"
-        >
-          <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
-            <FontAwesomeIcon icon={faSignOutAlt} className="text-sm" />
-          </div>
-          <span className="font-medium text-sm">Sign Out</span>
-        </button>
+        </nav>
       </div>
+
+      <button
+        onClick={handleSignOut}
+        className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-[#007dc6] hover:bg-blue-50 transition font-medium text-base"
+      >
+        <FontAwesomeIcon icon={faSignOutAlt} className="text-lg" />
+        Sign Out
+      </button>
     </aside>
   );
-} 
+}

@@ -12,6 +12,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      console.log('AuthGuard - currentUser:', user);
       if (user) {
         setAuthenticated(true);
         setLoading(false);
@@ -19,6 +20,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         setAuthenticated(false);
         setLoading(false);
         if (pathname !== "/login") {
+          console.log('AuthGuard - No user, redirecting to login.');
           router.replace("/login");
         }
       }
@@ -39,4 +41,4 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   return <>{children}</>;
-} 
+}

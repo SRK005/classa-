@@ -14,7 +14,7 @@ import {
 const navItems = [
   { name: "Dashboard", icon: faThLarge, href: "/content-management" },
   { name: "Manage School Content", icon: faBookOpen, href: "/content-management/manage-school-content" },
-  { name: "Edueron Content", icon: faUsers, href: "/content-management/edueron-content" },
+  { name: "CLASSA Content", icon: faUsers, href: "/content-management/edueron-content" },
   { name: "Help Center", icon: faHeadphonesAlt, href: "#" },
 ];
 

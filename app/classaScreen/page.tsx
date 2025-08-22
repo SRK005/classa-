@@ -37,7 +37,7 @@ const modules = [
     arrowColor: "text-purple-500 group-hover:text-white",
     bgHover: "hover:bg-purple-300",
     textImg: "/assets/images/77jyz_S.png",
-    page: null,
+    page: "/senseai",
   },
   {
     title: "School Management\nSystem",
@@ -175,21 +175,21 @@ export default function ClassaScreen() {
           </button>
           
           {/* 2nd row */}
-          {/* SenseAI (locked) */}
-          <div
-            className="rounded-2xl shadow-md p-4 md:p-6 flex flex-col justify-center items-center w-full h-56 md:h-60 relative cursor-not-allowed group select-none bg-gray-100"
-            style={{ opacity: 0.8 }}
+          {/* SenseAI */}
+          <button
+            key="SenseAI"
+            className={`rounded-2xl shadow-md p-4 md:p-6 flex flex-col justify-between w-full h-56 md:h-60 relative transition group bg-gray-100 focus:outline-none hover:bg-purple-300`}
+            onClick={() => handleCardClick(modules[3])}
           >
-            <span className="absolute top-4 left-4 text-purple-400 text-2xl">
-              <img src="/assets/images/senseai.png" alt="SenseAI Icon" className="w-8 h-8" />
-            </span>
-            <span className="text-6xl md:text-7xl font-extrabold text-gray-400 group-hover:text-purple-400 flex-1 flex items-center justify-center">S</span>
-            <div className="absolute inset-0 flex items-center justify-center transition-opacity rounded-2xl opacity-0 group-hover:opacity-100"
-                  style={{ pointerEvents: 'none', backgroundColor: '#e6d6fa' }}>
-              <span className="text-center w-full text-purple-700 text-lg md:text-2xl font-semibold">SenseAI</span>
+            <div className="flex justify-between items-start mb-2 md:mb-4">
+              <div className="text-gray-700 group-hover:text-white font-semibold text-base md:text-lg leading-tight whitespace-pre-line text-left">{modules[3].title}</div>
+              <img src={modules[3].icon} alt="Module Icon" className="h-10 w-10 md:h-12 md:w-12" />
             </div>
-            <span className="absolute top-4 right-4 text-gray-400 text-2xl"><svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor' className='w-8 h-8'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M16 12a4 4 0 01-8 0m8 0a4 4 0 00-8 0m8 0V8a4 4 0 00-8 0v4m8 0v4a4 4 0 01-8 0v-4' /></svg></span>
-          </div>
+            <div className="flex justify-between items-end h-full">
+              <span className={`text-gray-400 group-hover:text-white text-3xl md:text-4xl font-bold`}>⟶</span>
+              <img src={modules[3].textImg} alt="Module Text" className="h-16 md:h-20 w-auto" />
+            </div>
+          </button>
           
           {/* School Management System */}
           <button
@@ -258,4 +258,4 @@ export default function ClassaScreen() {
       `}</style>
     </div>
   );
-} 
+}

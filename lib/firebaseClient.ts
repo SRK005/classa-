@@ -16,16 +16,16 @@ const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
-enableIndexedDbPersistence(db).catch((err) => {
-  if (err.code === 'failed-precondition') {
-    // Multiple tabs open, persistence can only be enabled in one tab at a time.
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('Firestore persistence failed-precondition: Multiple tabs open.');
-    }
-  } else if (err.code === 'unimplemented') {
-    // The current browser does not support all of the features required to enable persistence
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('Firestore persistence unimplemented: Browser not supported.');
-    }
-  }
-}); 
+// enableIndexedDbPersistence(db).catch((err) => {
+//   if (err.code === 'failed-precondition') {
+//     // Multiple tabs open, persistence can only be enabled in one tab at a time.
+//     if (process.env.NODE_ENV === 'development') {
+//       console.warn('Firestore persistence failed-precondition: Multiple tabs open.');
+//     }
+//   } else if (err.code === 'unimplemented') {
+//     // The current browser does not support all of the features required to enable persistence
+//     if (process.env.NODE_ENV === 'development') {
+//       console.warn('Firestore persistence unimplemented: Browser not supported.');
+//     }
+//   }
+// });

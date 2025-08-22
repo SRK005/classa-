@@ -33,15 +33,6 @@ export default function SchoolSidebar() {
   return (
     <aside className="flex flex-col justify-between bg-white w-64 min-h-screen px-4 py-8 border-r border-gray-200 shadow-sm">
       <div>
-        <div className="flex items-center justify-between mb-6">
-          <button
-            onClick={() => router.push("/classaScreen")}
-            className="flex items-center gap-2 text-gray-600 hover:text-blue-600 transition-colors"
-          >
-            <FontAwesomeIcon icon={faArrowLeft} />
-            <span className="text-sm">Back to Main</span>
-          </button>
-        </div>
         
         <div className="flex items-center justify-left mb-4">
           <img

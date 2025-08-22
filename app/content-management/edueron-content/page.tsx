@@ -124,7 +124,7 @@ export default function EdueronContent() {
       <ContentSidebar />
       {/* Main Content */}
       <main className="flex-1 bg-gray-50 p-10">
-        <h1 className="text-3xl font-bold text-[#007dc6] mb-6">Edueron Content</h1>
+        <h1 className="text-3xl font-bold text-[#007dc6] mb-6">CLASSA Content</h1>
         {/* Subject List (horizontal scroll) */}
       <div className="flex space-x-4 overflow-x-auto pb-4 mb-8">
         {subjects.map((subject) => (

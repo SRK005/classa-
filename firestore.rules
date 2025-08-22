@@ -27,6 +27,14 @@ service cloud.firestore {
       allow create: if true;
       allow read: if true;
       allow write: if true;
+    }
+
+    match /test/{document} {
+      allow read: if true;
+    }
+
+    match /testResults/{document} {
+      allow read: if true;
       allow delete: if false;
     }
 
