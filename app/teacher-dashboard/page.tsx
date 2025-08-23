@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../contexts/AuthContext';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebaseClient';
-import RoleBasedRoute from '../components/RoleBasedRoute';
+import RoleBasedRoute from '../../app/components/RoleBasedRoute';
 import { 
   AcademicCapIcon,
   BookOpenIcon,
