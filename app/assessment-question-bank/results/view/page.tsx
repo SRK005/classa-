@@ -35,15 +35,15 @@ export default function ResultsViewPage() {
   }, []);
 
   const reportCards = [
+    // {
+    //   title: "Overall School Performance",
+    //   description: "Comprehensive overview of school-wide assessment results",
+    //   icon: "🏫",
+    //   color: "blue",
+    //   href: "/assessment-question-bank/results/view/overall-school"
+    // },
     {
-      title: "Overall School Performance",
-      description: "Comprehensive overview of school-wide assessment results",
-      icon: "🏫",
-      color: "blue",
-      href: "/assessment-question-bank/results/view/overall-school"
-    },
-    {
-      title: "Student Consolidated",
+      title: "Studentwise Report",
       description: "Individual student performance across all assessments",
       icon: "👨‍🎓",
       color: "emerald",

@@ -121,11 +121,13 @@ export default function LearningManagementSidebar() {
     <aside className="flex flex-col justify-between bg-white w-64 min-h-screen px-4 py-8 border-r border-gray-200 shadow-sm">
       <div>
         <div className="flex items-center justify-left mb-4">
-          <img
-            src="/assets/images/classa logo.png"
-            alt="Classa Logo"
-            className="object-contain h-22 w-46"
-          />
+          <Link href="/classaScreen">
+            <img
+              src="/assets/images/classa logo.png"
+              alt="Classa Logo"
+              className="object-contain h-22 w-46 cursor-pointer"
+            />
+          </Link>
         </div>
 
         <div className="mb-4">

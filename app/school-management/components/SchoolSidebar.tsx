@@ -35,11 +35,13 @@ export default function SchoolSidebar() {
       <div>
         
         <div className="flex items-center justify-left mb-4">
-          <img
-            src="/assets/images/classa logo.png"
-            alt="Classa Logo"
-            className="object-contain h-22 w-46"
-          />
+          <Link href="/classaScreen">
+            <img
+              src="/assets/images/classa logo.png"
+              alt="Classa Logo"
+              className="object-contain h-22 w-46 cursor-pointer"
+            />
+          </Link>
         </div>
 
         <div className="mb-4">

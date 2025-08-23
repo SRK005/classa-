@@ -76,14 +76,30 @@ export default function EdueronContent() {
           const d = docSnap.data();
           return {
             id: docSnap.id,
-            name: d.name || "",
+            name: (d.name || "").replace('th', ''),
             description: d.description || "",
             image: d.image || "",
             ref: docSnap.ref,
           };
         });
-        setSubjects(data);
-        setSelectedSubject(data[0] ?? null);
+        const desiredOrder = [
+          "Physics-11",
+          "Chemistry - 11",
+          "Biology - 11",
+          "Physics - 12",
+          "Chemistry - 12",
+          "Biology - 12",
+        ];
+        const sortedData = data.sort((a, b) => {
+          const indexA = desiredOrder.indexOf(a.name);
+          const indexB = desiredOrder.indexOf(b.name);
+          if (indexA === -1) return 1; // Put items not in the list at the end
+          if (indexB === -1) return -1;
+          return indexA - indexB;
+        });
+
+        setSubjects(sortedData);
+        setSelectedSubject(sortedData[0] ?? null);
       } catch {
         setSubjects([]);
         setSelectedSubject(null);

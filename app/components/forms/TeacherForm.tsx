@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs } from "firebase/firestore";
+import { collection, addDoc, updateDoc, doc, setDoc, serverTimestamp, query, where, getDocs } from "firebase/firestore";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { db, auth } from "../../../lib/firebaseClient";
 import { useAuth } from "../../contexts/AuthContext";
@@ -159,7 +159,7 @@ export default function TeacherForm({ teacherId, initialData, onSuccess, onCance
         userId = userCredential.user.uid;
 
         // Create user document
-        await addDoc(collection(db, "users"), {
+        await setDoc(doc(db, "users", userId), {
           uid: userId,
           name: formData.name.trim(),
           email: formData.email.trim(),
@@ -173,7 +173,7 @@ export default function TeacherForm({ teacherId, initialData, onSuccess, onCance
           name: formData.name.trim(),
           email: formData.email.trim(),
           teacherId: formData.teacherId.trim(),
-          userId: doc(db, "users", userId),
+          userId: userId,
           schoolId: doc(db, "school", schoolId!),
           classes: formData.selectedClasses.map(classId => doc(db, "classes", classId)),
           subjects: formData.selectedSubjects.map(subjectId => doc(db, "subjects", subjectId)),

@@ -107,8 +107,8 @@ export default function StudentConsolidatedPage() {
     const mockData: StudentData[] = [
       {
         id: 'STU001',
-        name: 'Arjun Sharma',
-        class: 'Class 10-A',
+        name: 'Sanjay',
+        class: 'Class ',
         totalTests: 12,
         averageScore: 85.5,
         highestScore: 98,
@@ -136,8 +136,8 @@ export default function StudentConsolidatedPage() {
       },
       {
         id: 'STU002',
-        name: 'Priya Patel',
-        class: 'Class 10-A',
+        name: 'Abu',
+        class: 'Class 12',
         totalTests: 10,
         averageScore: 78.2,
         highestScore: 89,
@@ -165,8 +165,8 @@ export default function StudentConsolidatedPage() {
       },
       {
         id: 'STU003',
-        name: 'Rahul Kumar',
-        class: 'Class 10-B',
+        name: 'Gokul',
+        class: 'Class 11',
         totalTests: 8,
         averageScore: 65.8,
         highestScore: 78,
