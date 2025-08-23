@@ -1,6 +1,6 @@
 "use client";
-import { useContext, useEffect, useState } from "react";
-import { AuthContext } from "../../contexts/AuthContext";
+import { useEffect, useState } from "react";
+import { useAuth } from "../contexts/AuthContext";
 import { useRouter } from "next/navigation";
 
 interface RoleBasedRouteProps {
@@ -9,7 +9,7 @@ interface RoleBasedRouteProps {
 }
 
 export default function RoleBasedRoute({ allowedRoles, children }: RoleBasedRouteProps) {
-  const { user, loading } = useContext(AuthContext);
+  const { user, userRole, loading } = useAuth();
   const router = useRouter();
   const [hasAccess, setHasAccess] = useState(false);
 
@@ -18,7 +18,7 @@ export default function RoleBasedRoute({ allowedRoles, children }: RoleBasedRout
       if (!user) {
         // If no user, redirect to login
         router.replace("/login");
-      } else if (user.role && allowedRoles.includes(user.role)) {
+      } else if (userRole && allowedRoles.includes(userRole)) {
         // If user has an allowed role, grant access
         setHasAccess(true);
       } else {
@@ -26,7 +26,7 @@ export default function RoleBasedRoute({ allowedRoles, children }: RoleBasedRout
         router.replace("/dashboard"); // Or a specific unauthorized page
       }
     }
-  }, [user, loading, allowedRoles, router]);
+  }, [user, userRole, loading, allowedRoles, router]);
 
   if (loading || !hasAccess) {
     // Optionally render a loading spinner or nothing while checking access
