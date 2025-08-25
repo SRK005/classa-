@@ -47,7 +47,7 @@ export default function ResultsViewPage() {
       description: "Individual student performance across all assessments",
       icon: "👨‍🎓",
       color: "emerald",
-      href: "/assessment-question-bank/results/view/student-consolidated"
+      href: "/assessment-dashboard"
     },
     {
       title: "Classwise Report",

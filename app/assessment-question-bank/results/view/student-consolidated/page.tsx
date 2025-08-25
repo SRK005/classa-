@@ -100,15 +100,20 @@ export default function StudentConsolidatedPage() {
   const [studentsData, setStudentsData] = useState<StudentData[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStudent, setSelectedStudent] = useState<StudentData | null>(null);
+  const [selectedClass, setSelectedClass] = useState<string>(''); // New state for selected class
   const router = useRouter();
 
-  // Mock data for demonstration
-  useEffect(() => {
+  // Function to fetch student data (placeholder for now)
+  const fetchStudentData = async (classFilter?: string) => {
+    setLoading(true);
+    // In a real application, you would fetch data from Firestore here
+    // based on the classFilter.
+    // For now, we'll use a simplified mock data approach.
     const mockData: StudentData[] = [
       {
         id: 'STU001',
         name: 'Sanjay',
-        class: 'Class ',
+        class: 'Class 11',
         totalTests: 12,
         averageScore: 85.5,
         highestScore: 98,
@@ -194,11 +199,19 @@ export default function StudentConsolidatedPage() {
       }
     ];
 
+    const filteredData = classFilter
+      ? mockData.filter(student => student.class === classFilter)
+      : mockData;
+
     setTimeout(() => {
-      setStudentsData(mockData);
+      setStudentsData(filteredData);
       setLoading(false);
     }, 1000);
-  }, []);
+  };
+
+  useEffect(() => {
+    fetchStudentData(selectedClass);
+  }, [selectedClass]);
 
   const getPerformanceBand = (score: number) => {
     if (score >= 80) return { label: 'Excellent', color: 'text-green-600', bg: 'bg-green-100' };
@@ -206,17 +219,21 @@ export default function StudentConsolidatedPage() {
     return { label: 'At-Risk', color: 'text-red-600', bg: 'bg-red-100' };
   };
 
+  const filteredStudents = selectedClass
+    ? studentsData.filter(student => student.class === selectedClass)
+    : studentsData;
+
   const overallStats = {
-    totalStudents: studentsData.length,
-    averageScore: studentsData.reduce((sum, student) => sum + student.averageScore, 0) / studentsData.length || 0,
-    totalTests: studentsData.reduce((sum, student) => sum + student.totalTests, 0),
-    overallPassRate: studentsData.reduce((sum, student) => sum + student.passRate, 0) / studentsData.length || 0
+    totalStudents: filteredStudents.length,
+    averageScore: filteredStudents.reduce((sum, student) => sum + student.averageScore, 0) / filteredStudents.length || 0,
+    totalTests: filteredStudents.reduce((sum, student) => sum + student.totalTests, 0),
+    overallPassRate: filteredStudents.reduce((sum, student) => sum + student.passRate, 0) / filteredStudents.length || 0
   };
 
   const performanceDistribution = [
-    { name: 'Excellent (≥80)', value: studentsData.filter(s => s.averageScore >= 80).length, color: '#22c55e' },
-    { name: 'Good (60-79)', value: studentsData.filter(s => s.averageScore >= 60 && s.averageScore < 80).length, color: '#3b82f6' },
-    { name: 'At-Risk (<60)', value: studentsData.filter(s => s.averageScore < 60).length, color: '#ef4444' }
+    { name: 'Excellent (≥80)', value: filteredStudents.filter(s => s.averageScore >= 80).length, color: '#22c55e' },
+    { name: 'Good (60-79)', value: filteredStudents.filter(s => s.averageScore >= 60 && s.averageScore < 80).length, color: '#3b82f6' },
+    { name: 'At-Risk (<60)', value: filteredStudents.filter(s => s.averageScore < 60).length, color: '#ef4444' }
   ];
 
   if (loading) return (
@@ -253,6 +270,19 @@ export default function StudentConsolidatedPage() {
             </button>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Student Consolidated Report</h1>
             <p className="text-gray-600">Individual student performance across all assessments</p>
+          <div className="mt-4">
+            <label htmlFor="class-select" className="block text-sm font-medium text-gray-700">Filter by Class:</label>
+            <select
+              id="class-select"
+              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+              value={selectedClass}
+              onChange={(e) => setSelectedClass(e.target.value)}
+            >
+              <option value="">All Classes</option>
+              <option value="Class 11">Class 11</option>
+              <option value="Class 12">Class 12</option>
+            </select>
+          </div>
           </div>
 
           {/* Action Buttons */}
@@ -278,7 +308,7 @@ export default function StudentConsolidatedPage() {
               value={overallStats.totalStudents}
               icon={<Users className="w-6 h-6" />}
               color="blue"
-              subtitle="Active learners"
+              subtitle={selectedClass ? `Students in ${selectedClass}` : "Active learners"}
             />
             <KPICard
               title="Average Score"
@@ -339,7 +369,7 @@ export default function StudentConsolidatedPage() {
             <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
               <h3 className="text-xl font-semibold text-gray-900 mb-4">Student Performance Comparison</h3>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={studentsData}>
+                <BarChart data={filteredStudents}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis 
                     dataKey="name" 
@@ -384,7 +414,7 @@ export default function StudentConsolidatedPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {studentsData.map((student) => {
+                  {filteredStudents.map((student) => {
                     const performanceBand = getPerformanceBand(student.averageScore);
                     return (
                       <tr key={student.id} className="hover:bg-gray-50 transition-colors">

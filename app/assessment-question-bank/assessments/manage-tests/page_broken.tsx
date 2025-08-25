@@ -454,41 +454,47 @@ export default function ManageTestsPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {paginatedTests.map(
-                (test: {
-                  id: string;
-                  name: string;
-                  className: string;
-                  start: any;
-                  end: any;
-                  status: keyof typeof statusConfig;
-                  online?: boolean;
+              {paginatedTests.map((test: {
+                id: string;
+                name: string;
+                className: string;
+                start: any;
+                end: any;
+                status: keyof typeof statusConfig;
+                online?: boolean;
+                questions?: any[];
+                totalQuestions?: number | null;
+              }) => {
+                const StatusIcon = statusConfig[test.status].icon;
+                return (
+                  <div key={test.id} className="bg-white rounded-2xl shadow border border-gray-100 p-6">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-xl font-bold text-blue-900">
+                        {test.name || "Untitled Test"}
+                      </h3>
+                      <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm ${statusConfig[test.status].bg} ${statusConfig[test.status].text} ${statusConfig[test.status].border} border`}>
+                        <StatusIcon className="w-4 h-4" />
+                        {statusConfig[test.status].label}
                       </span>
                     </div>
+
                     <div className="flex flex-wrap gap-4 text-sm text-blue-900">
                       <div>
-                        <span className="font-semibold">Class:</span>{" "}
-                        {test.className}
+                        <span className="font-semibold">Class:</span> {test.className}
                       </div>
                       <div>
-                        <span className="font-semibold">Start:</span>{" "}
-                        {test.start
-                          ? new Date(test.start).toLocaleString()
-                          : "-"}
+                        <span className="font-semibold">Start:</span> {test.start ? new Date(test.start).toLocaleString() : "-"}
                       </div>
                       <div>
-                        <span className="font-semibold">End:</span>{" "}
-                        {test.end ? new Date(test.end).toLocaleString() : "-"}
+                        <span className="font-semibold">End:</span> {test.end ? new Date(test.end).toLocaleString() : "-"}
                       </div>
                       <div>
-                        <span className="font-semibold">Questions:</span>{" "}
-                        {test.questions ? test.questions.length : 0}
-                        {typeof test.totalQuestions === "number"
-                          ? ` / ${test.totalQuestions}`
-                          : ""}
+                        <span className="font-semibold">Questions:</span> {test.questions ? test.questions.length : 0}
+                        {typeof test.totalQuestions === "number" ? ` / ${test.totalQuestions}` : ""}
                       </div>
                     </div>
-                    <div className="flex flex-col gap-2 mt-2 items-center">
+
+                    <div className="flex flex-col gap-2 mt-4 items-center">
                       {/* First row: Three buttons */}
                       <div className="flex flex-wrap gap-3 w-full justify-start">
                         <button
@@ -515,16 +521,14 @@ export default function ManageTestsPage() {
                           Prepare PDF
                         </button>
                       </div>
+
                       {/* Horizontal divider */}
                       <hr className="my-2 border-gray-200 w-full" />
+
                       {/* Second row: Last two buttons (Publish, Delete) */}
                       <div className="flex flex-wrap gap-3 w-full justify-start">
                         <button
-                          className={`px-4 py-2 rounded-xl font-semibold shadow-sm border transition ${
-                            test.online
-                              ? "bg-blue-900 text-white border-blue-900 cursor-default"
-                              : "border-pink-200 bg-white text-pink-700 hover:bg-pink-50 focus:ring-2 focus:ring-pink-200"
-                          }`}
+                          className={`px-4 py-2 rounded-xl font-semibold shadow-sm border transition ${test.online ? "bg-blue-900 text-white border-blue-900 cursor-default" : "border-pink-200 bg-white text-pink-700 hover:bg-pink-50 focus:ring-2 focus:ring-pink-200"}`}
                           onClick={() => handlePublish(test.id)}
                           disabled={test.online || actionLoading === test.id}
                         >
@@ -545,6 +549,7 @@ export default function ManageTestsPage() {
                         </button>
                       </div>
                     </div>
+
                     {/* QuestionSelectionDialog for this test */}
                     {selectDialogOpen === test.id && (
                       <QuestionSelectionDialog
@@ -566,8 +571,8 @@ export default function ManageTestsPage() {
                       />
                     )}
                   </div>
-                )
-              )}
+                );
+              })}
 
               {/* Test Preview Dialog */}
               {previewDialogOpen && (
