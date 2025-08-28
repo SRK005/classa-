@@ -34,7 +34,8 @@ export default function ManageSchoolContent() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* Upload Notes */}
-          <div className="bg-white/80 backdrop-blur-md rounded-2xl p-8 shadow flex flex-col items-center border border-gray-100">
+          <div className="relative bg-white/80 backdrop-blur-md rounded-2xl p-8 shadow-lg flex flex-col items-center border border-gray-100 transform transition-transform duration-200 hover:scale-105">
+            {/* <div className="absolute left-0 top-0 h-full w-2 bg-purple-500 rounded-l-2xl"></div> */}
             <div className="bg-blue-100 p-4 rounded-full mb-4">
               <FontAwesomeIcon icon={faFileAlt} className="text-3xl text-blue-600" />
             </div>
@@ -48,7 +49,8 @@ export default function ManageSchoolContent() {
             </button>
           </div>
           {/* Upload Videos */}
-          <div className="bg-white/80 backdrop-blur-md rounded-2xl p-8 shadow flex flex-col items-center border border-gray-100">
+          <div className="relative bg-white/80 backdrop-blur-md rounded-2xl p-8 shadow-lg flex flex-col items-center border border-gray-100 transform transition-transform duration-200 hover:scale-105">
+            {/* <div className="absolute left-0 top-0 h-20 w-2 bg-purple-500 rounded-l-2xl"></div> */}
             <div className="bg-blue-100 p-4 rounded-full mb-4">
               <FontAwesomeIcon icon={faVideo} className="text-3xl text-blue-600" />
             </div>
@@ -65,4 +67,4 @@ export default function ManageSchoolContent() {
       </main>
     </div>
   );
-} 
+}

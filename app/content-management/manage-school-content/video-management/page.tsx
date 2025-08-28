@@ -172,12 +172,14 @@ export default function VideoManagement() {
         <h1 className="text-3xl font-bold text-blue-800 mb-6">Video Management</h1>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
           {/* Videos Count */}
-          <div className="bg-white/80 backdrop-blur-md rounded-2xl p-8 shadow flex flex-col items-center border border-gray-100">
+          <div className="relative bg-white/80 backdrop-blur-md rounded-2xl p-8 shadow-lg flex flex-col items-center border border-gray-100 group overflow-hidden transform transition-transform duration-200 hover:scale-105">
+            <div className="absolute left-0 top-0 h-1/2 w-2 bg-blue-500 rounded-l-2xl transition-all duration-200 group-hover:h-full"></div>
             <div className="text-4xl font-bold text-blue-700 mb-2">{loading ? "-" : filteredVideos.length}</div>
             <div className="text-gray-600">Total Videos Uploaded</div>
           </div>
           {/* Upload New Video */}
-          <div className="bg-white/80 backdrop-blur-md rounded-2xl p-8 shadow flex flex-col items-center border border-gray-100">
+          <div className="relative bg-white/80 backdrop-blur-md rounded-2xl p-8 shadow-lg flex flex-col items-center border border-gray-100 group overflow-hidden transform transition-transform duration-200 hover:scale-105">
+            <div className="absolute left-0 top-0 h-1/2 w-2 bg-blue-500 rounded-l-2xl transition-all duration-200 group-hover:h-full"></div>
             <button className="bg-blue-600 text-white px-8 py-3 rounded-xl font-semibold shadow hover:bg-blue-700 transition text-lg mb-2" onClick={() => setShowModal(true)}>Upload New Video</button>
             <div className="text-gray-600">Upload video lectures for your classes.</div>
           </div>
@@ -216,21 +218,26 @@ export default function VideoManagement() {
         {/* Videos List */}
         <div>
           {loading ? (
-            <div className="text-center text-gray-500">Loading videos...</div>
+            <div className="text-center text-gray-400 text-lg">Loading videos...</div>
           ) : error ? (
-            <div className="text-center text-red-500">{error}</div>
+            <div className="text-center text-red-500 text-lg">{error}</div>
           ) : filteredVideos.length === 0 ? (
-            <div className="text-center text-gray-500">No videos found.</div>
+            <div className="text-center text-gray-400 text-lg">No videos found for the selected filter.</div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {filteredVideos.map((video: any) => (
-                <div key={video.id} className="bg-white rounded-xl shadow p-6 flex flex-col gap-3 border border-gray-100">
-                  <div className="font-bold text-blue-700 text-lg">{video.title}</div>
-                  <div className="text-gray-600">{video.description}</div>
-                  <div className="text-gray-500 text-sm">Class: <span className="font-medium">{video.className}</span></div>
-                  <div className="text-gray-500 text-sm">Subject: <span className="font-medium">{video.subjectName}</span></div>
-                  <div>
-                    <a href={video.videoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">View/Download Video</a>
+                <div key={video.id} className="bg-white/90 backdrop-blur-md rounded-2xl p-6 shadow flex flex-col border border-gray-100">
+                  <div className="font-bold text-lg text-blue-800 mb-1">{video.title}</div>
+                  <div className="text-gray-600 mb-2">{video.description}</div>
+                  <div className="flex gap-4 mb-4">
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${video.className === 'class 12' ? 'bg-blue-100 text-blue-700' : video.className === 'Class 11' ? 'bg-yellow-100 text-yellow-700' : video.className === 'Class 10' ? 'bg-pink-100 text-pink-700' : 'bg-gray-100 text-gray-700'}`}>
+                      {video.className}
+                    </span>
+                    <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-semibold">{video.subjectName}</span>
+                  </div>
+                  <div className="flex gap-3 mt-auto">
+                    <a href={video.videoUrl} target="_blank" rel="noopener noreferrer" className="bg-blue-500 text-white px-4 py-2 rounded-lg font-semibold shadow hover:bg-blue-600 transition text-center">Download</a>
+                    <button className="bg-red-100 text-red-600 px-4 py-2 rounded-lg font-semibold shadow hover:bg-red-200 transition text-center border border-red-200" onClick={() => alert('Delete functionality not implemented yet.')}>Delete</button>
                   </div>
                 </div>
               ))}
@@ -239,213 +246,217 @@ export default function VideoManagement() {
         </div>
         {/* Upload Modal */}
         {showModal && (
-          <div className="fixed inset-0 bg-white/60 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-md relative">
-              <button
-                type="button"
-                aria-label="Close"
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none z-30"
-                onClick={() => setShowModal(false)}
-              >
-                &times;
-              </button>
-              {uploading && (
-                <div className="absolute inset-0 bg-white bg-opacity-70 flex flex-col items-center justify-center z-20">
-                  <svg className="animate-spin h-8 w-8 text-blue-600 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                  </svg>
-                  <div className="text-blue-700 font-semibold">Uploading...</div>
-                </div>
-              )}
-              <div className="text-xl font-bold mb-4">Upload New Video</div>
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  if (!title || !description || !selectedClass || !selectedSubject || (!file && !youtubeUrl)) {
-                    alert("Please fill all required fields and either upload a video file or provide a YouTube URL.");
-                    return;
-                  }
-                  setUploading(true);
-                  try {
-                    const user = auth.currentUser;
-                    if (!user) throw new Error("User not logged in");
-                    const userSnap = await getDoc(doc(db, "users", user.uid));
-                    if (!userSnap.exists()) throw new Error("User doc not found");
-                    const schoolID = userSnap.data().schoolId;
-                    let url = youtubeUrl;
-                    
-                    if (file) {
-                      const storageMod = await import("firebase/storage");
-                      const { ref, uploadBytes, getDownloadURL } = storageMod;
-                      const storageRef = ref(
-                        (await import("../../../../components/firebase")).storage,
-                        `videos/${user.uid}/${Date.now()}_${file.name}`
-                      );
-                      await uploadBytes(storageRef, file);
-                      url = await getDownloadURL(storageRef);
-                    }
-                    const { addDoc, serverTimestamp } = await import("firebase/firestore");
-                    await addDoc(collection(db, "contents"), {
-                      title,
-                      description,
-                      url,
-                      createdBy: doc(db, "users", user.uid),
-                      createdAt: serverTimestamp(),
-                      classId: doc(db, "classes", selectedClass),
-                      subjectId: doc(db, "subjects", selectedSubject),
-                      schoolID,
-                      video: true
-                    });
-                    setShowModal(false);
-                    setTitle("");
-                    setDescription("");
-                    setSelectedClass("");
-                    setSelectedSubject("");
-                    setFile(null);
-                    setYoutubeUrl("");
-                    // Refetch videos
-                    setLoading(true);
-                    const q = query(
-                      collection(db, "contents"),
-                      where("video", "==", true),
-                      where("schoolID", "==", schoolID)
-                    );
-                    const snap = await getDocs(q);
-                    const videosData = await Promise.all(
-                      snap.docs.map(async (docSnap) => {
-                        const d = docSnap.data();
-                        let className = "";
-                        if (d.classId) {
-                          try {
-                            const classSnap = await getDoc(d.classId);
-                            className = classSnap.exists() ? (classSnap.data() as any).name || "" : "";
-                          } catch {}
-                        }
-                        let subjectName = "";
-                        if (d.subjectId) {
-                          try {
-                            const subjectSnap = await getDoc(d.subjectId);
-                            subjectName = subjectSnap.exists() ? (subjectSnap.data() as any).name || "" : "";
-                          } catch {}
-                        }
-                        return {
-                          id: docSnap.id,
-                          title: d.title,
-                          description: d.description,
-                          className,
-                          subjectName,
-                          videoUrl: d.url || "#"
-                        };
-                      })
-                    );
-                    setVideos(videosData);
-                    setLoading(false);
-                  } catch (err: any) {
-                    alert(err.message || "Upload failed");
-                  } finally {
-                    setUploading(false);
-                  }
-                }}
-              >
-                <div className="mb-4">
-                  <label className="block text-gray-700 mb-1">Class</label>
-                  <select
-                    className="border rounded px-3 py-2 w-full"
-                    value={selectedClass}
-                    onChange={e => {
-                      setSelectedClass(e.target.value);
-                      setSelectedSubject("");
-                    }}
-                    disabled={loadingClasses}
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-50/80 backdrop-blur-sm overflow-auto">
+            <div className="relative w-full max-w-2xl mx-auto p-0">
+              <div className="bg-white/90 backdrop-blur-2xl rounded-3xl shadow-2xl border border-gray-100 p-0 flex flex-col animate-fadeIn overflow-hidden max-h-[90vh] relative">
+                {/* Header */}
+                <div className="flex items-center justify-between px-8 pt-8 pb-2">
+                  <h2 className="text-2xl font-bold text-gray-800">Upload New Video</h2>
+                  <button
+                    className="bg-white/70 hover:bg-gray-100 text-blue-500 rounded-full p-2 shadow-md border border-gray-200 transition"
+                    onClick={() => setShowModal(false)}
+                    aria-label="Close"
                   >
-                    <option value="">Select Class</option>
-                    {classes.map((cls: any) => (
-                      <option key={cls.id} value={cls.id}>{cls.name}</option>
-                    ))}
-                  </select>
+                    <svg width="1.5em" height="1.5em" viewBox="0 0 24 24"><path fill="currentColor" d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 0 0 5.7 7.11L10.59 12l-4.89 4.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4z"/></svg>
+                  </button>
                 </div>
-                <div className="mb-4">
-                  <label className="block text-gray-700 mb-1">Subject</label>
-                  {selectedClass && (
-                    <select
-                      className="border rounded px-3 py-2 w-full"
-                      value={selectedSubject}
-                      onChange={e => setSelectedSubject(e.target.value)}
-                      disabled={!selectedClass || loadingUploadSubjects}
-                    >
-                      <option value="">Select Subject</option>
-                      {uploadSubjects.length === 0 && <option disabled>No subjects found for this class</option>}
-                      {uploadSubjects.map((sub: any) => (
-                        <option key={sub.id} value={sub.id}>{sub.name}</option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-                <div className="mb-4">
-                  <label className="block text-gray-700 mb-1">Title</label>
-                  <input
-                    className="border rounded px-3 py-2 w-full"
-                    value={title}
-                    onChange={e => setTitle(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block text-gray-700 mb-1">Description</label>
-                  <textarea
-                    className="border rounded px-3 py-2 w-full"
-                    value={description}
-                    onChange={e => setDescription(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block text-gray-700 mb-1">Video Upload</label>
-                  <div className="mb-2">
-                    <input
-                      type="file"
-                      accept="video/*"
-                      onChange={e => setFile(e.target.files?.[0] || null)}
-                      className="w-full text-sm text-gray-500
-                        file:mr-4 file:py-2 file:px-4
-                        file:rounded-full file:border-0
-                        file:text-sm file:font-semibold
-                        file:bg-blue-50 file:text-blue-700
-                        hover:file:bg-blue-100"
-                      required={!youtubeUrl}
-                    />
+                {/* Uploading overlay */}
+                {uploading && (
+                  <div className="absolute inset-0 bg-white/70 flex flex-col items-center justify-center z-20">
+                    <svg className="animate-spin h-8 w-8 text-blue-600 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                    </svg>
+                    <div className="text-blue-700 font-semibold">Uploading...</div>
                   </div>
-                  <div className="text-center text-gray-500 text-sm mb-2">OR</div>
-                  <div>
-                    <label className="block text-gray-700 mb-1">YouTube URL</label>
+                )}
+                {/* Content */}
+                <div className="px-8 pt-2 pb-6 overflow-y-auto">
+                  {/* File Upload Area */}
+                  <div className="w-full bg-gray-50/80 border-2 border-dashed border-blue-100 rounded-2xl flex flex-col items-center justify-center py-8 mb-6 shadow-sm">
+                    <svg width="40" height="40" fill="none" viewBox="0 0 24 24" className="mb-2 text-blue-300"><path fill="currentColor" d="M12 16v-8m0 0-3 3m3-3 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    <div className="text-gray-500 text-lg mb-2">Drop video to upload or click</div>
+                    <label className="inline-block">
+                      <input
+                        type="file"
+                        accept="video/*"
+                        className="hidden"
+                        onChange={e => setFile(e.target.files?.[0] || null)}
+                        required={!youtubeUrl}
+                      />
+                      <span className="inline-block bg-blue-100 text-blue-700 font-semibold px-6 py-2 rounded-xl shadow hover:bg-blue-200 hover:text-blue-800 transition cursor-pointer">Upload Video</span>
+                    </label>
+                    {file && <div className="mt-2 text-blue-600 font-semibold">{file.name}</div>}
+                  </div>
+                  <div className="text-center text-gray-500 text-sm mb-6">OR</div>
+                  <div className="mb-6">
+                    <label className="block text-gray-700 font-semibold mb-1">YouTube URL</label>
                     <input
                       type="url"
                       placeholder="https://www.youtube.com/watch?v=..."
                       value={youtubeUrl}
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => setYoutubeUrl(e.target.value)}
-                      className="w-full border rounded px-3 py-2 text-sm"
+                      className="w-full bg-gray-50/80 backdrop-blur border border-blue-100 rounded-xl px-5 py-3 text-base font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 shadow"
                       required={!file}
                     />
                     <p className="text-xs text-gray-500 mt-1">Enter a valid YouTube URL</p>
                   </div>
-                </div>
-                <div className="flex gap-4 mt-6">
-                  <button
-                    type="submit"
-                    className="bg-blue-600 text-white px-6 py-2 rounded font-semibold hover:bg-blue-700 transition"
+                  {/* Details Section */}
+                  <div className="mb-4">
+                    <div className="text-blue-700 font-bold text-lg mb-2">Details</div>
+                  </div>
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (!title || !description || !selectedClass || !selectedSubject || (!file && !youtubeUrl)) {
+                        alert("Please fill all required fields and either upload a video file or provide a YouTube URL.");
+                        return;
+                      }
+                      setUploading(true);
+                      try {
+                        const user = auth.currentUser;
+                        if (!user) throw new Error("User not logged in");
+                        const userSnap = await getDoc(doc(db, "users", user.uid));
+                        if (!userSnap.exists()) throw new Error("User doc not found");
+                        const schoolID = userSnap.data().schoolId;
+                        let url = youtubeUrl;
+                        
+                        if (file) {
+                          const storageMod = await import("firebase/storage");
+                          const { ref, uploadBytes, getDownloadURL } = storageMod;
+                          const storageRef = ref(
+                            (await import("../../../../components/firebase")).storage,
+                            `videos/${user.uid}/${Date.now()}_${file.name}`
+                          );
+                          await uploadBytes(storageRef, file);
+                          url = await getDownloadURL(storageRef);
+                        }
+                        const { addDoc, serverTimestamp } = await import("firebase/firestore");
+                        await addDoc(collection(db, "contents"), {
+                          title,
+                          description,
+                          url,
+                          createdBy: doc(db, "users", user.uid),
+                          createdAt: serverTimestamp(),
+                          classId: doc(db, "classes", selectedClass),
+                          subjectId: doc(db, "subjects", selectedSubject),
+                          schoolID,
+                          video: true
+                        });
+                        setShowModal(false);
+                        setTitle("");
+                        setDescription("");
+                        setSelectedClass("");
+                        setSelectedSubject("");
+                        setFile(null);
+                        setYoutubeUrl("");
+                        // Refetch videos
+                        setLoading(true);
+                        const q = query(
+                          collection(db, "contents"),
+                          where("video", "==", true),
+                          where("schoolID", "==", schoolID)
+                        );
+                        const snap = await getDocs(q);
+                        const videosData = await Promise.all(
+                          snap.docs.map(async (docSnap) => {
+                            const d = docSnap.data();
+                            let className = "";
+                            if (d.classId) {
+                              try {
+                                const classSnap = await getDoc(d.classId);
+                                className = classSnap.exists() ? (classSnap.data() as any).name || "" : "";
+                              } catch {}
+                            }
+                            let subjectName = "";
+                            if (d.subjectId) {
+                              try {
+                                const subjectSnap = await getDoc(d.subjectId);
+                                subjectName = subjectSnap.exists() ? (subjectSnap.data() as any).name || "" : "";
+                              } catch {}
+                            }
+                            return {
+                              id: docSnap.id,
+                              title: d.title,
+                              description: d.description,
+                              className,
+                              subjectName,
+                              videoUrl: d.url || "#"
+                            };
+                          })
+                        );
+                        setVideos(videosData);
+                        setLoading(false);
+                      } catch (err: any) {
+                        alert(err.message || "Upload failed");
+                      } finally {
+                        setUploading(false);
+                      }
+                    }}
                   >
-                    Upload
-                  </button>
-                  <button
-                    type="button"
-                    className="bg-gray-200 text-gray-700 px-6 py-2 rounded font-semibold hover:bg-gray-300 transition"
-                    onClick={() => setShowModal(false)}
-                  >
-                    Cancel
-                  </button>
+                    {/* Class/Subject Row */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                      <div className="relative">
+                        <select
+                          className="border rounded px-3 py-2 w-full"
+                          value={selectedClass}
+                          onChange={e => {
+                            setSelectedClass(e.target.value);
+                            setSelectedSubject("");
+                          }}
+                          disabled={loadingClasses}
+                        >
+                          <option value="">Select Class</option>
+                          {classes.map((cls: any) => (
+                            <option key={cls.id} value={cls.id}>{cls.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="relative">
+                        {selectedClass && (
+                          <select
+                            className="border rounded px-3 py-2 w-full"
+                            value={selectedSubject}
+                            onChange={e => setSelectedSubject(e.target.value)}
+                            disabled={!selectedClass || loadingUploadSubjects}
+                          >
+                            <option value="">Select Subject</option>
+                            {uploadSubjects.length === 0 && <option disabled>No subjects found for this class</option>}
+                            {uploadSubjects.map((sub: any) => (
+                              <option key={sub.id} value={sub.id}>{sub.name}</option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    </div>
+                    {/* Title */}
+                    <div className="relative mb-6">
+                      <label className="block text-gray-700 font-semibold mb-1">Title</label>
+                      <input
+                        className="w-full bg-gray-50/80 backdrop-blur border border-blue-100 rounded-xl px-5 py-3 text-base font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 shadow"
+                        value={title}
+                        onChange={e => setTitle(e.target.value)}
+                        required
+                      />
+                    </div>
+                    {/* Description */}
+                    <div className="relative mb-2">
+                      <label className="block text-gray-700 font-semibold mb-1">Description</label>
+                      <textarea
+                        className="w-full bg-gray-50/80 backdrop-blur border border-blue-100 rounded-xl px-5 py-3 text-base font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 shadow min-h-[90px]"
+                        value={description}
+                        onChange={e => setDescription(e.target.value)}
+                        required
+                      />
+                    </div>
+                    {/* Action Buttons */}
+                    <div className="flex flex-wrap justify-end gap-4 mt-4">
+                      <button type="button" className="text-blue-400 font-semibold px-6 py-2 rounded-xl hover:bg-blue-50 transition" onClick={() => setShowModal(false)}>Cancel</button>
+                      <button type="submit" className="bg-gradient-to-r from-blue-500 to-blue-300 text-white font-bold px-8 py-3 rounded-xl shadow-lg hover:from-blue-600 hover:to-blue-400 transition disabled:opacity-60">Upload</button>
+                    </div>
+                  </form>
                 </div>
-              </form>
+              </div>
             </div>
           </div>
         )}

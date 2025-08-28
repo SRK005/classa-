@@ -30,7 +30,7 @@ const navItems = [
   {
     name: "Results",
     icon: faChartBar,
-    href: "/assessment-question-bank/results",
+    href: "/assessment-question-bank/results/view",
   },
 ];
 

@@ -55,7 +55,7 @@ export default function AssessmentDashboard() {
             <p className="text-gray-700 text-center mb-6">View results, analytics, and download detailed reports.</p>
             <button
               className="bg-green-700 text-white px-8 py-3 rounded-xl font-semibold shadow-lg hover:bg-green-800 transition text-lg"
-              onClick={() => router.push("/assessment-question-bank/results")}
+              onClick={() => router.push("/assessment-question-bank/results/view")}
             >
               Go to Results
             </button>

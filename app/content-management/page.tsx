@@ -28,7 +28,7 @@ export default function ManageSchoolContent() {
     <div className="min-h-screen flex bg-gray-50 font-sans">
       <ContentSidebar />
       <main className="flex-1 bg-gray-50 flex flex-col items-center justify-center p-10">
-        <h1 className="text-3xl font-bold text-blue-800 mb-2">Content Management</h1>
+        <h1 className="text-3xl font-bold text-blue-400 mb-2">Content Management</h1>
         <p className="text-gray-500 mb-10">Manage your school content and CLASSA resources here.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12 w-full max-w-4xl">
           {/* Manage School Content Card */}

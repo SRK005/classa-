@@ -267,12 +267,14 @@ export default function NotesManagement() {
         <h1 className="text-3xl font-bold text-blue-800 mb-6">Notes Management</h1>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
           {/* Notes Count */}
-          <div className="bg-white/80 backdrop-blur-md rounded-2xl p-8 shadow flex flex-col items-center border border-gray-100">
+          <div className="relative bg-white/80 backdrop-blur-md rounded-2xl p-8 shadow-lg flex flex-col items-center border border-gray-100 group overflow-hidden transform transition-transform duration-200 hover:scale-105">
+            <div className="absolute left-0 top-0 h-1/2 w-2 bg-blue-500 rounded-l-2xl transition-all duration-200 group-hover:h-full"></div>
             <div className="text-4xl font-bold text-blue-700 mb-2">{loading ? "-" : filteredNotes.length}</div>
             <div className="text-gray-600">Total Notes Uploaded</div>
           </div>
           {/* Upload New Notes */}
-          <div className="bg-white/80 backdrop-blur-md rounded-2xl p-8 shadow flex flex-col items-center border border-gray-100">
+          <div className="relative bg-white/80 backdrop-blur-md rounded-2xl p-8 shadow-lg flex flex-col items-center border border-gray-100 group overflow-hidden transform transition-transform duration-200 hover:scale-105">
+            <div className="absolute left-0 top-0 h-1/2 w-2 bg-blue-500 rounded-l-2xl transition-all duration-200 group-hover:h-full"></div>
             <button className="bg-blue-600 text-white px-8 py-3 rounded-xl font-semibold shadow hover:bg-blue-700 transition text-lg mb-2" onClick={() => setShowModal(true)}>Upload New Notes</button>
             <div className="text-gray-600">Upload PDF or document notes for your classes.</div>
           </div>
@@ -438,7 +440,9 @@ export default function NotesManagement() {
                   <div className="font-bold text-lg text-blue-800 mb-1">{note.title}</div>
                   <div className="text-gray-600 mb-2">{note.description}</div>
                   <div className="flex gap-4 mb-4">
-                    <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold">{note.className}</span>
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${note.className === 'class 12' ? 'bg-blue-100 text-blue-700' : note.className === 'Class 11' ? 'bg-yellow-100 text-yellow-700' : note.className === 'Class 10' ? 'bg-pink-100 text-pink-700' : 'bg-gray-100 text-gray-700'}`}>
+                    {note.className}
+                    </span>
                     <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-semibold">{note.subjectName}</span>
                   </div>
                   {/* Download and Delete buttons in one row */}
@@ -477,4 +481,4 @@ export default function NotesManagement() {
       </main>
     </div>
   );
-} 
+}

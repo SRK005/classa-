@@ -37,14 +37,14 @@ const modules = [
     arrowColor: "text-purple-500 group-hover:text-white",
     bgHover: "hover:bg-purple-300",
     textImg: "/assets/images/77jyz_S.png",
-    page: "/senseai",
+    page: "/sense-ai",
   },
   {
     title: "School Management\nSystem",
     icon: "/assets/images/sms.png",
     arrowColor: "text-orange-600 group-hover:text-white",
     bgHover: "hover:bg-orange-300",
-    textImg: "/assets/images/77jyz_S.png",
+    textImg: "/assets/images/S.png",
     page: "/school-management",
   },
 ];
@@ -112,7 +112,7 @@ export default function ClassaScreen() {
   return (
     <div
       className="min-h-screen w-full bg-cover bg-center flex flex-col items-center justify-start"
-      style={{ backgroundImage: 'url(/assets/images/Profile_Screen.png)' }}
+      style={{ backgroundImage: 'url(/assets/images/Profile_Screen1.png)' }}
     >
       <div className="w-full max-w-6xl px-2 sm:px-4 md:px-8 py-6 md:py-10 mx-auto">
         {/* Header Row */}

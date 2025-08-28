@@ -131,7 +131,7 @@ export default function QuestionBankDashboard() {
                 ? <span className="flex items-center justify-center"><svg className="animate-spin h-6 w-6 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg></span>
                 : edueronCount.toLocaleString()}
             </div>
-            <div className="text-gray-500">Questions in Edueron</div>
+            <div className="text-gray-500">Questions in CLASSA</div>
           </div>
           {/* Questions in PYQ */}
           <div className="bg-white border border-gray-100 rounded-2xl p-8 flex flex-col items-center">
@@ -169,8 +169,8 @@ export default function QuestionBankDashboard() {
             <div className="bg-[#6EE7B7] p-3 rounded-full mb-4">
               <FontAwesomeIcon icon={faLayerGroup} className="text-xl text-white" />
             </div>
-            <h2 className="font-bold text-lg text-gray-800 mb-2 text-center">View Edueron Questions</h2>
-            <p className="text-gray-500 text-center mb-6">Explore Edueron's curated question bank for your use.</p>
+            <h2 className="font-bold text-lg text-gray-800 mb-2 text-center">View CLASSA Questions</h2>
+            <p className="text-gray-500 text-center mb-6">Explore CLASSA's curated question bank for your use.</p>
             <button className="bg-[#6EE7B7] text-white px-6 py-2 rounded-lg font-semibold hover:bg-[#059669] transition text-base" onClick={() => router.push('/assessment-question-bank/questionbank/view-edueron-questions')}>View</button>
           </div>
           {/* View PYQ */}
