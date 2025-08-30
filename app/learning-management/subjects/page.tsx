@@ -223,13 +223,16 @@ export default function SubjectManagementPage() {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-l font-medium text-gray-600 ">
+                        Image
+                      </th>
+                      <th className="px-6 py-3 text-left text-l font-medium text-gray-600 ">
                         Subject Name
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-l font-medium text-gray-600 ">
                         Classes
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-l font-medium text-gray-600 ">
                         Actions
                       </th>
                     </tr>
@@ -237,7 +240,7 @@ export default function SubjectManagementPage() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {subjects.length === 0 ? (
                       <tr>
-                        <td colSpan={3} className="px-6 py-8 text-center text-gray-500">
+                        <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
                           <div className="flex flex-col items-center">
                             <FontAwesomeIcon icon={faBookOpen} className="text-4xl text-gray-300 mb-4" />
                             <p className="text-lg font-medium mb-2">No subjects found</p>
@@ -249,24 +252,28 @@ export default function SubjectManagementPage() {
                       subjects.map((subject) => (
                         <tr key={subject.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              {subject.image && (
-                                <img
-                                  src={subject.image}
-                                  alt={subject.name}
-                                  className="h-10 w-10 rounded-full object-cover mr-3"
-                                />
-                              )}
-                              <div>
-                                <div className="text-sm font-medium text-gray-900">
-                                  {subject.name}
-                                </div>
-                                {subject.description && (
-                                  <div className="text-sm text-gray-500 max-w-xs truncate">
-                                    {subject.description}
-                                  </div>
-                                )}
+                            {subject.image ? (
+                              <img
+                                src={subject.image}
+                                alt={subject.name}
+                                className="h-10 w-10 rounded-full object-cover"
+                              />
+                            ) : (
+                              <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                                <FontAwesomeIcon icon={faBookOpen} className="text-gray-400 text-sm" />
                               </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">
+                                {subject.name}
+                              </div>
+                              {subject.description && (
+                                <div className="text-sm text-gray-500 max-w-xs truncate">
+                                  {subject.description}
+                                </div>
+                              )}
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">

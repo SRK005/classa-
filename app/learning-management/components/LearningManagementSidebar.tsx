@@ -131,8 +131,8 @@ export default function LearningManagementSidebar() {
         </div>
 
         <div className="mb-4">
-          <h2 className="text-lg font-semibold text-gray-800 mb-2">Learning Management</h2>
-          <p className="text-sm text-gray-600">Manage subjects, lessons, and content</p>
+          <h2 className="text-lg font-bold text-gray-800 mb-2">Learning Management</h2>
+          <p className="text-base font-semibold text-gray-600">Manage subjects, lessons, and content</p>
         </div>
 
         <nav className="flex flex-col gap-2">

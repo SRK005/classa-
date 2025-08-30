@@ -141,7 +141,8 @@ export default function VideoManagement() {
               description: d.description,
               className,
               subjectName,
-              videoUrl: d.url || "#"
+              videoUrl: d.url || "#",
+              createdAt: d.createdAt
             };
           })
         );
@@ -179,7 +180,7 @@ export default function VideoManagement() {
           </div>
           {/* Upload New Video */}
           <div className="relative bg-white/80 backdrop-blur-md rounded-2xl p-8 shadow-lg flex flex-col items-center border border-gray-100 group overflow-hidden transform transition-transform duration-200 hover:scale-105">
-            <div className="absolute left-0 top-0 h-1/2 w-2 bg-blue-500 rounded-l-2xl transition-all duration-200 group-hover:h-full"></div>
+            <div className="absolute left-0 top-0 h-1/2 w-2 bg-green-500 rounded-l-2xl transition-all duration-200 group-hover:h-full"></div>
             <button className="bg-blue-600 text-white px-8 py-3 rounded-xl font-semibold shadow hover:bg-blue-700 transition text-lg mb-2" onClick={() => setShowModal(true)}>Upload New Video</button>
             <div className="text-gray-600">Upload video lectures for your classes.</div>
           </div>
@@ -226,7 +227,17 @@ export default function VideoManagement() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {filteredVideos.map((video: any) => (
-                <div key={video.id} className="bg-white/90 backdrop-blur-md rounded-2xl p-6 shadow flex flex-col border border-gray-100">
+                <div key={video.id} className="bg-white/90 backdrop-blur-md rounded-2xl p-6 shadow flex flex-col border border-gray-100 relative">
+                  {/* Date bubble in top right */}
+                  <div className="absolute top-4 right-4 bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold">
+                    {video.createdAt ? (() => {
+                      const date = new Date(video.createdAt.toDate ? video.createdAt.toDate() : video.createdAt);
+                      const day = date.getDate();
+                      const month = date.toLocaleDateString('en-US', { month: 'short' });
+                      const year = date.getFullYear();
+                      return `${day} ${month} ${year}`;
+                    })() : 'No date'}
+                  </div>
                   <div className="font-bold text-lg text-blue-800 mb-1">{video.title}</div>
                   <div className="text-gray-600 mb-2">{video.description}</div>
                   <div className="flex gap-4 mb-4">
@@ -273,7 +284,7 @@ export default function VideoManagement() {
                 {/* Content */}
                 <div className="px-8 pt-2 pb-6 overflow-y-auto">
                   {/* File Upload Area */}
-                  <div className="w-full bg-gray-50/80 border-2 border-dashed border-blue-100 rounded-2xl flex flex-col items-center justify-center py-8 mb-6 shadow-sm">
+                  <div className="w-full bg-blue-100/80 border-2 border-dashed border-blue-100 rounded-2xl flex flex-col items-center justify-center py-8 mb-6 shadow-sm">
                     <svg width="40" height="40" fill="none" viewBox="0 0 24 24" className="mb-2 text-blue-300"><path fill="currentColor" d="M12 16v-8m0 0-3 3m3-3 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     <div className="text-gray-500 text-lg mb-2">Drop video to upload or click</div>
                     <label className="inline-block">
@@ -296,7 +307,7 @@ export default function VideoManagement() {
                       placeholder="https://www.youtube.com/watch?v=..."
                       value={youtubeUrl}
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => setYoutubeUrl(e.target.value)}
-                      className="w-full bg-gray-50/80 backdrop-blur border border-blue-100 rounded-xl px-5 py-3 text-base font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 shadow"
+                      className="w-full bg-blue-100/80 backdrop-blur border border-blue-100 rounded-xl px-5 py-3 text-base font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 shadow"
                       required={!file}
                     />
                     <p className="text-xs text-gray-500 mt-1">Enter a valid YouTube URL</p>
@@ -381,7 +392,8 @@ export default function VideoManagement() {
                               description: d.description,
                               className,
                               subjectName,
-                              videoUrl: d.url || "#"
+                              videoUrl: d.url || "#",
+                              createdAt: d.createdAt
                             };
                           })
                         );
@@ -398,7 +410,8 @@ export default function VideoManagement() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                       <div className="relative">
                         <select
-                          className="border rounded px-3 py-2 w-full"
+                          className="w-full bg-blue-100/80 backdrop-blur border border-blue-100 rounded-xl px-5 py-3 text-base font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 shadow"
+                           className="w-full bg-blue-100/80 backdrop-blur border border-blue-100 rounded-xl px-5 py-3 text-base font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 shadow"
                           value={selectedClass}
                           onChange={e => {
                             setSelectedClass(e.target.value);
@@ -433,9 +446,9 @@ export default function VideoManagement() {
                     <div className="relative mb-6">
                       <label className="block text-gray-700 font-semibold mb-1">Title</label>
                       <input
-                        className="w-full bg-gray-50/80 backdrop-blur border border-blue-100 rounded-xl px-5 py-3 text-base font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 shadow"
+                        className="w-full bg-blue-100/80 backdrop-blur border border-blue-100 rounded-xl px-5 py-3 text-base font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 shadow"
                         value={title}
-                        onChange={e => setTitle(e.target.value)}
+                        onChange={e => setTitle(e.target.value.charAt(0).toUpperCase() + e.target.value.slice(1))}
                         required
                       />
                     </div>
@@ -443,9 +456,9 @@ export default function VideoManagement() {
                     <div className="relative mb-2">
                       <label className="block text-gray-700 font-semibold mb-1">Description</label>
                       <textarea
-                        className="w-full bg-gray-50/80 backdrop-blur border border-blue-100 rounded-xl px-5 py-3 text-base font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 shadow min-h-[90px]"
+                        className="w-full bg-blue-100/80 backdrop-blur border border-blue-100 rounded-xl px-5 py-3 text-base font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 shadow min-h-[90px]"
                         value={description}
-                        onChange={e => setDescription(e.target.value)}
+                        onChange={e => setDescription(e.target.value.charAt(0).toUpperCase() + e.target.value.slice(1))}
                         required
                       />
                     </div>

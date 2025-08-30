@@ -14,6 +14,23 @@ import {
   DocumentData,
 } from "firebase/firestore";
 import Link from "next/link";
+import {
+  Container,
+  Typography,
+  Box,
+  CircularProgress,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Alert,
+  Button,
+} from "@mui/material";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import Sidebar from "../../components/Sidebar";
 
 type TestRow = {
   id: string;
@@ -236,63 +253,172 @@ export default function StudentDetailPage() {
   }, [studentId, uidFromQuery]);
 
   const title = useMemo(() => {
-    if (studentName) return `${studentName} • Tests Completed`;
-    return "Student Tests Completed";
+    if (studentName) return `${studentName}'s Assessment Dashboard`;
+    return "Student Assessment Dashboard";
   }, [studentName]);
 
+  // Calculate test statistics
+  const testStats = useMemo(() => {
+    if (tests.length === 0) {
+      return {
+        totalTests: 0,
+        averageScore: 0,
+        highestScore: 0,
+        lowestScore: 0
+      };
+    }
+
+    const validScores = tests.filter(test => typeof test.percentageScore === 'number' && !isNaN(test.percentageScore));
+    const scores = validScores.map(test => test.percentageScore || 0);
+
+    return {
+      totalTests: tests.length,
+      averageScore: scores.length > 0 ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : 0,
+      highestScore: scores.length > 0 ? Math.max(...scores) : 0,
+      lowestScore: scores.length > 0 ? Math.min(...scores) : 0
+    };
+  }, [tests]);
+
+  // Chart data for performance over time
+  const chartData = useMemo(() => {
+    if (tests.length === 0) return [];
+    return tests.map(test => ({
+      name: test.testName || `Test ${test.id.substring(0, 4)}`,
+      score: test.percentageScore || 0,
+      date: test.createdAt ? test.createdAt.toLocaleDateString() : 'N/A'
+    })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [tests]);
+
   return (
-    <div className="flex-1 bg-gray-50 min-h-screen">
-      <div className="p-6 max-w-5xl mx-auto">
-        <div className="mb-4 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-800">{title}</h1>
-          <Link href="/assessment-dashboard" className="text-blue-600 hover:underline">← Back to Dashboard</Link>
-        </div>
+    <Box sx={{ display: 'flex', backgroundColor: 'white', minHeight: '100vh' }}>
+      <Sidebar />
+      <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1, backgroundColor: 'gra' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+          <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary' }}>
+            {title}
+          </Typography>
+          <Button variant="outlined" component={Link} href="/assessment-dashboard">
+            ← Back to Dashboard
+          </Button>
+        </Box>
+
+        {/* Test Statistics Cards */}
+        {!loading && tests.length > 0 && (
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr 1fr' }, gap: 3, mb: 4 }}>
+            <Paper elevation={2} sx={{ p: 3, textAlign: 'center', backgroundColor: '#f8fafc' }}>
+              <Typography variant="h6" sx={{ color: '#1e40af', fontWeight: 'bold', mb: 1 }}>
+                {testStats.totalTests}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#64748b' }}>
+                Total Tests Taken
+              </Typography>
+            </Paper>
+
+            <Paper elevation={2} sx={{ p: 3, textAlign: 'center', backgroundColor: '#f0f9ff' }}>
+              <Typography variant="h6" sx={{ color: '#0369a1', fontWeight: 'bold', mb: 1 }}>
+                {testStats.averageScore}%
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#64748b' }}>
+                Average Score
+              </Typography>
+            </Paper>
+
+            <Paper elevation={2} sx={{ p: 3, textAlign: 'center', backgroundColor: '#f0fdf4' }}>
+              <Typography variant="h6" sx={{ color: '#15803d', fontWeight: 'bold', mb: 1 }}>
+                {testStats.highestScore}%
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#64748b' }}>
+                Highest Score
+              </Typography>
+            </Paper>
+
+            <Paper elevation={2} sx={{ p: 3, textAlign: 'center', backgroundColor: '#fef2f2' }}>
+              <Typography variant="h6" sx={{ color: '#dc2626', fontWeight: 'bold', mb: 1 }}>
+                {testStats.lowestScore}%
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#64748b' }}>
+                Lowest Score
+              </Typography>
+            </Paper>
+          </Box>
+        )}
 
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4 text-red-700">{error}</div>
+          <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>
         )}
 
         {loading ? (
-          <div className="flex justify-center items-center h-48">
-            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500"></div>
-          </div>
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
+            <CircularProgress />
+          </Box>
         ) : tests.length === 0 ? (
-          <div className="bg-white rounded-lg p-6 shadow-sm text-gray-600">No completed tests found for this student.</div>
+          <Paper elevation={1} sx={{ p: 3, textAlign: 'center' }}>
+            <Typography variant="body1" color="text.secondary">No completed tests found for this student.</Typography>
+          </Paper>
         ) : (
-          <div className="bg-white rounded-lg p-6 shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Test</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {tests.map((t) => (
-                    <tr key={t.id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {t.source === "testResults" ? (
-                          <Link href={`/test-result/${t.id}`} className="text-blue-600 hover:underline">
-                            {t.testName || t.testId || "-"}
-                          </Link>
-                        ) : (
-                          <span>{t.testName || t.testId || "-"}</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{t.subjectName || "-"}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{typeof t.percentageScore === "number" ? `${t.percentageScore}%` : "-"}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{t.createdAt ? t.createdAt.toLocaleDateString() : "-"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <Box>
+            <Paper elevation={2} sx={{ p: 3, mb: 4 }}>
+              <Typography variant="h5" component="h2" gutterBottom sx={{ mb: 3 }}>
+                Performance Over Time
+              </Typography>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart
+                  data={chartData}
+                  margin={{
+                    top: 5, right: 30, left: 20, bottom: 5,
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="score" stroke="#8884d8" activeDot={{ r: 8 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </Paper>
+
+            <Paper elevation={2} sx={{ p: 3 }}>
+              <Typography variant="h5" component="h2" gutterBottom sx={{ mb: 3 }}>
+                All Completed Tests
+              </Typography>
+              <TableContainer>
+                <Table sx={{ minWidth: 650 }} aria-label="simple table">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 'bold' }}>Test</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>Subject</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>Score</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>Date</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {tests.map((t) => (
+                      <TableRow
+                        key={t.id}
+                        sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
+                      >
+                        <TableCell component="th" scope="row">
+                          {t.source === "testResults" ? (
+                            <Link href={`/test-result/${t.id}`} style={{ textDecoration: 'none', color: '#1976d2' }}>
+                              {t.testName || t.testId || "-"}
+                            </Link>
+                          ) : (
+                            <span>{t.testName || t.testId || "-"}</span>
+                          )}
+                        </TableCell>
+                        <TableCell>{t.subjectName || "-"}</TableCell>
+                        <TableCell>{typeof t.percentageScore === "number" ? `${t.percentageScore}%` : "-"}</TableCell>
+                        <TableCell>{t.createdAt ? t.createdAt.toLocaleDateString() : "-"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          </Box>
         )}
-      </div>
-    </div>
+      </Container>
+    </Box>
   );
 }

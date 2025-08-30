@@ -12,6 +12,7 @@ import {
   faQuestionCircle,
   faChevronLeft,
   faChevronRight,
+  faMap,
 } from "@fortawesome/free-solid-svg-icons";
 import { db } from '../../../lib/firebaseClient';
 import { collection, query, where, getDocs, doc } from 'firebase/firestore';
@@ -53,6 +54,13 @@ const cardData = [
     color: "from-pink-200 to-pink-100",
     iconColor: "text-pink-400",
     activeTextColor: "text-pink-400",
+  },
+  {
+    title: "Mind Maps",
+    icon: faMap,
+    color: "from-teal-200 to-teal-100",
+    iconColor: "text-teal-400",
+    activeTextColor: "text-teal-400",
   },
   {
     title: "Question Bank",
@@ -97,18 +105,32 @@ export default function LessonDetails() {
   const [showExplanation, setShowExplanation] = useState(false);
   const [optionAnim, setOptionAnim] = useState<{[key:number]:string}>({});
 
+  // Flash Cards state
+  const [showFlashModal, setShowFlashModal] = useState(false);
+  const [flashCards, setFlashCards] = useState<Array<{ id: string; front: string; back: string; image?: string | null }>>([]);
+  const [loadingFlash, setLoadingFlash] = useState(false);
+  const [flashError, setFlashError] = useState<string | null>(null);
+  const [currentFlashIdx, setCurrentFlashIdx] = useState(0);
+  const [isFlipped, setIsFlipped] = useState(false);
+
+  // Mind Maps state
+  const [showMindMapsModal, setShowMindMapsModal] = useState(false);
+  const [mindMaps, setMindMaps] = useState<Array<{ id: string; content: string }>>([]);
+  const [loadingMindMaps, setLoadingMindMaps] = useState(false);
+  const [mindMapsError, setMindMapsError] = useState<string | null>(null);
+  const [currentMindMapIdx, setCurrentMindMapIdx] = useState(0);
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       import('dompurify').then((mod) => {
-        let purifyInstance = null;
-        if (typeof (mod as any).default === 'function') {
-          purifyInstance = (mod as any).default(window);
-        } else if (typeof (mod as any) === 'function') {
-          purifyInstance = (mod as any)(window);
-        } else if ((mod as any).createDOMPurify && typeof (mod as any).createDOMPurify === 'function') {
-          purifyInstance = (mod as any).createDOMPurify(window);
+        const purify = (mod as any).default || mod;
+        if (typeof purify === 'function' || (purify && typeof purify.sanitize === 'function')) {
+          setDOMPurify(purify);
+        } else {
+          console.warn('DOMPurify not available, will fall back to text rendering');
         }
-        setDOMPurify(purifyInstance);
+      }).catch((error) => {
+        console.warn('Failed to import DOMPurify:', error);
       });
     }
   }, []);
@@ -165,7 +187,7 @@ export default function LessonDetails() {
           fieldName = 'content';
           break;
         case 'menmonics':
-          collectionName = 'menmonics';
+          collectionName = 'mnemonics';
           fieldName = 'concent';
           break;
       }
@@ -213,6 +235,26 @@ export default function LessonDetails() {
         ? <InlineMath key={i} math={part.replace(/\$/g, '')} />
         : <span key={i}>{part}</span>
     );
+  }
+
+  // Helper to render flash card content as complete HTML pages
+  function renderFlashContent(content: string) {
+    if (!content) return null;
+    // Render complete HTML content directly without any frame
+    return <iframe
+      srcDoc={content}
+      title="Flash Card Content"
+      className="w-full h-full border-0 rounded-none"
+      style={{
+        background: 'white',
+        minHeight: '300px',
+        border: 'none',
+        outline: 'none',
+        boxShadow: 'none'
+      }}
+      frameBorder="0"
+      scrolling="auto"
+    />;
   }
 
   function handleSelectOption(idx:number) {
@@ -279,11 +321,76 @@ export default function LessonDetails() {
     }
   }, [lessonId]);
 
+  // Fetch flash cards for lesson
+  const fetchFlashCards = useCallback(async () => {
+    if (!lessonId) return;
+    setLoadingFlash(true);
+    setFlashError(null);
+    try {
+      const lessonRef = doc(db, 'lessons', lessonId);
+      const q = query(collection(db, 'flashCards'), where('lessonID', '==', lessonRef));
+      const snap = await getDocs(q);
+      const mapped = snap.docs
+        .map((docSnap) => {
+          const d: any = docSnap.data();
+          const front = d.front || d.term || d.title || d.question || d.word || d.faceA || d.cardFront || d.heading || d.name || '';
+          const back = d.back || d.definition || d.answer || d.explanation || d.content || d.details || d.faceB || d.cardBack || d.description || '';
+          const image = d.image || d.imageUrl || d.img || null;
+          return { id: docSnap.id, front, back, image };
+        })
+        .filter((fc) => fc.front || fc.back);
+      setFlashCards(mapped);
+      setCurrentFlashIdx(0);
+      setIsFlipped(false);
+    } catch (e) {
+      setFlashError('Failed to fetch flash cards.');
+      console.error('DEBUG: error fetching flash cards', e);
+    } finally {
+      setLoadingFlash(false);
+    }
+  }, [lessonId]);
+
+  // Fetch mind maps for lesson
+  const fetchMindMaps = useCallback(async () => {
+    if (!lessonId) return;
+    setLoadingMindMaps(true);
+    setMindMapsError(null);
+    try {
+      const lessonRef = doc(db, 'lessons', lessonId);
+      const q = query(collection(db, 'mindmaps'), where('lessonID', '==', lessonRef));
+      const snap = await getDocs(q);
+      const mapped = snap.docs.map((docSnap) => {
+        const d: any = docSnap.data();
+        return { id: docSnap.id, content: d.content || '' };
+      });
+      setMindMaps(mapped);
+      setCurrentMindMapIdx(0);
+    } catch (e) {
+      setMindMapsError('Failed to fetch mind maps.');
+      console.error('DEBUG: error fetching mind maps', e);
+    } finally {
+      setLoadingMindMaps(false);
+    }
+  }, [lessonId]);
+
   useEffect(() => {
     if (showQBankModal) {
       fetchQuestions();
     }
   }, [showQBankModal, fetchQuestions]);
+
+  useEffect(() => {
+    if (showFlashModal) {
+      fetchFlashCards();
+      setIsFlipped(false);
+    }
+  }, [showFlashModal, fetchFlashCards]);
+
+  useEffect(() => {
+    if (showMindMapsModal) {
+      fetchMindMaps();
+    }
+  }, [showMindMapsModal, fetchMindMaps]);
 
   function handleCheckAnswer() {
     if (selectedOption === null) return;
@@ -382,17 +489,21 @@ export default function LessonDetails() {
                 animIdx === 1 ? () => handleOpenModal('conceptSummary') :
                 animIdx === 2 ? () => handleOpenModal('glossary') :
                 animIdx === 3 ? () => handleOpenModal('menmonics') :
-                animIdx === 5 ? () => setShowQBankModal(true) :
+                animIdx === 4 ? () => setShowFlashModal(true) :
+                animIdx === 5 ? () => setShowMindMapsModal(true) :
+                animIdx === 6 ? () => setShowQBankModal(true) :
                 undefined
               }
-              role={animIdx >= 0 && animIdx <= 5 ? 'button' : undefined}
-              tabIndex={animIdx >= 0 && animIdx <= 5 ? 0 : -1}
+              role={[0,1,2,3,4,5,6].includes(animIdx) ? 'button' : undefined}
+              tabIndex={[0,1,2,3,4,5,6].includes(animIdx) ? 0 : -1}
               aria-label={
                 animIdx === 0 ? 'View Short Notes' :
                 animIdx === 1 ? 'View Concept Summary' :
                 animIdx === 2 ? 'View Glossary' :
                 animIdx === 3 ? 'View Mnemonics' :
-                animIdx === 5 ? 'View Question Bank' :
+                animIdx === 4 ? 'View Flash Cards' :
+                animIdx === 5 ? 'View Mind Maps' :
+                animIdx === 6 ? 'View Question Bank' :
                 undefined
               }
               style={{
@@ -471,6 +582,79 @@ export default function LessonDetails() {
                   style={{ background: 'white' }}
                 />
               )}
+            </div>
+          </div>
+        )}
+        {/* Flash Cards Modal */}
+        {showFlashModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+            <div className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-[98vw] h-[98vh] max-w-none max-h-none flex flex-col relative animate-fadeIn overflow-hidden" style={{ padding: 0 }}>
+              <div className="flex items-center justify-between px-8 py-4 border-b border-gray-200 bg-white/80 z-10">
+                <h2 className="text-2xl font-bold text-[#007dc6]">Flash Cards</h2>
+                <button
+                  className="text-gray-400 hover:text-blue-500 text-2xl font-bold"
+                  onClick={() => setShowFlashModal(false)}
+                  aria-label="Close"
+                >
+                  &times;
+                </button>
+              </div>
+              <div className="flex-1 flex flex-col items-center justify-center w-full h-full bg-gray-50 overflow-hidden">
+                {loadingFlash ? (
+                  <div className="flex-1 flex items-center justify-center text-lg text-gray-400">Loading flash cards...</div>
+                ) : flashError ? (
+                  <div className="flex-1 flex items-center justify-center text-red-500 text-lg">{flashError}</div>
+                ) : flashCards.length === 0 ? (
+                  <div className="flex-1 flex items-center justify-center text-gray-400 text-lg">No flash cards found for this lesson.</div>
+                ) : (
+                  <div className="w-full h-full">
+                    {renderFlashContent(flashCards[currentFlashIdx]?.front || '')}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Mind Maps Modal */}
+        {showMindMapsModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+            <div className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-[98vw] h-[98vh] max-w-none max-h-none flex flex-col relative animate-fadeIn overflow-hidden" style={{ padding: 0 }}>
+              <div className="flex items-center justify-between px-8 py-4 border-b border-gray-200 bg-white/80 z-10">
+                <h2 className="text-2xl font-bold text-[#007dc6]">Mind Maps</h2>
+                <button
+                  className="text-gray-400 hover:text-blue-500 text-2xl font-bold"
+                  onClick={() => setShowMindMapsModal(false)}
+                  aria-label="Close"
+                >
+                  &times;
+                </button>
+              </div>
+              <div className="flex-1 flex flex-col items-center justify-center w-full h-full bg-gray-50 overflow-hidden">
+                {loadingMindMaps ? (
+                  <div className="flex-1 flex items-center justify-center text-lg text-gray-400">Loading mind maps...</div>
+                ) : mindMapsError ? (
+                  <div className="flex-1 flex items-center justify-center text-red-500 text-lg">{mindMapsError}</div>
+                ) : mindMaps.length === 0 ? (
+                  <div className="flex-1 flex items-center justify-center text-gray-400 text-lg">No mind maps found for this lesson.</div>
+                ) : (
+                  <div className="w-full h-full">
+                    <iframe
+                      srcDoc={mindMaps[currentMindMapIdx]?.content || ''}
+                      title="Mind Map Content"
+                      className="w-full h-full border-0 rounded-none"
+                      style={{
+                        background: 'white',
+                        minHeight: '300px',
+                        border: 'none',
+                        outline: 'none',
+                        boxShadow: 'none'
+                      }}
+                      frameBorder="0"
+                      scrolling="auto"
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -654,4 +838,4 @@ export default function LessonDetails() {
       </main>
     </div>
   );
-} 
+}

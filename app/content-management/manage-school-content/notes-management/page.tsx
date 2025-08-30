@@ -145,7 +145,8 @@ export default function NotesManagement() {
               description: d.description,
               className,
               subjectName,
-              downloadUrl: d.url || "#"
+              downloadUrl: d.url || "#",
+              createdAt: d.createdAt
             };
           })
         );
@@ -231,7 +232,8 @@ export default function NotesManagement() {
                 description: d.description,
                 className,
                 subjectName,
-                downloadUrl: d.url || "#"
+                downloadUrl: d.url || "#",
+                createdAt: d.createdAt
               };
             })
           );
@@ -274,7 +276,7 @@ export default function NotesManagement() {
           </div>
           {/* Upload New Notes */}
           <div className="relative bg-white/80 backdrop-blur-md rounded-2xl p-8 shadow-lg flex flex-col items-center border border-gray-100 group overflow-hidden transform transition-transform duration-200 hover:scale-105">
-            <div className="absolute left-0 top-0 h-1/2 w-2 bg-blue-500 rounded-l-2xl transition-all duration-200 group-hover:h-full"></div>
+            <div className="absolute left-0 top-0 h-1/2 w-2 bg-green-500 rounded-l-2xl transition-all duration-200 group-hover:h-full"></div>
             <button className="bg-blue-600 text-white px-8 py-3 rounded-xl font-semibold shadow hover:bg-blue-700 transition text-lg mb-2" onClick={() => setShowModal(true)}>Upload New Notes</button>
             <div className="text-gray-600">Upload PDF or document notes for your classes.</div>
           </div>
@@ -331,7 +333,7 @@ export default function NotesManagement() {
                 </div>
                 {/* File Upload Area */}
                 <div className="px-8 pt-2 pb-6 overflow-y-auto">
-                  <div className="w-full bg-gray-50/80 border-2 border-dashed border-blue-100 rounded-2xl flex flex-col items-center justify-center py-8 mb-6 shadow-sm">
+                  <div className="w-full bg-blue-100/80 border-2 border-dashed border-blue-100 rounded-2xl flex flex-col items-center justify-center py-8 mb-6 shadow-sm">
                     <svg width="40" height="40" fill="none" viewBox="0 0 24 24" className="mb-2 text-blue-300"><path fill="currentColor" d="M12 16v-8m0 0-3 3m3-3 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     <div className="text-gray-500 text-lg mb-2">Drop files to upload or click</div>
                     <label className="inline-block">
@@ -356,7 +358,7 @@ export default function NotesManagement() {
                             setSelectedClass(e.target.value);
                             setSelectedSubject(""); // Reset subject when class changes
                           }}
-                          className="border rounded px-3 py-2 w-full"
+                          className="w-full bg-blue-100/80 backdrop-blur border border-blue-100 rounded-xl px-5 py-3 text-base font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 shadow"
                           disabled={loadingClasses}
                         >
                           <option value="">Select Class</option>
@@ -371,7 +373,7 @@ export default function NotesManagement() {
                           <select
                             value={selectedSubject}
                             onChange={e => setSelectedSubject(e.target.value)}
-                            className="border rounded px-3 py-2 w-full"
+                            className="w-full bg-blue-100/80 backdrop-blur border border-blue-100 rounded-xl px-5 py-3 text-base font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 shadow"
                             disabled={!selectedClass || loadingUploadSubjects}
                           >
                             <option value="">Select Subject</option>
@@ -384,15 +386,20 @@ export default function NotesManagement() {
                       </div>
 
                     </div>
-                    {/* Title */}``
+                    {/* Title */}
                     <div className="relative">
                       <label className="block text-gray-700 font-semibold mb-1">Title</label>
                       <input
                         type="text"
-                        className="w-full bg-gray-50/80 backdrop-blur border border-blue-100 rounded-xl px-5 py-3 text-base font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 shadow"
+                        className="w-full bg-blue-100/80 backdrop-blur border border-blue-100 rounded-xl px-5 py-3 text-base font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 shadow"
                         placeholder="Title"
                         value={title}
-                        onChange={e => setTitle(e.target.value)}
+                        onChange={e => {
+                          const v = e.target.value;
+                          const nv = v.replace(/^(\s*)(\S)/, (_: any, ws: string, ch: string) => ws + String(ch).toUpperCase());
+                          setTitle(nv);
+                        }}
+                        autoCapitalize="sentences"
                         autoComplete="off"
                       />
                     </div>
@@ -400,10 +407,15 @@ export default function NotesManagement() {
                     <div className="relative">
                       <label className="block text-gray-700 font-semibold mb-1">Description</label>
                       <textarea
-                        className="w-full bg-gray-50/80 backdrop-blur border border-blue-100 rounded-xl px-5 py-3 text-base font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 shadow min-h-[90px]"
+                        className="w-full bg-blue-100/80 backdrop-blur border border-blue-100 rounded-xl px-5 py-3 text-base font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-2 focus:ring-blue-200 shadow min-h-[90px]"
                         placeholder="Description"
                         value={description}
-                        onChange={e => setDescription(e.target.value)}
+                        onChange={e => {
+                          const v = e.target.value;
+                          const nv = v.replace(/^(\s*)(\S)/, (_: any, ws: string, ch: string) => ws + String(ch).toUpperCase());
+                          setDescription(nv);
+                        }}
+                        autoCapitalize="sentences"
                       />
                     </div>
                     {/* Action Buttons */}
@@ -436,7 +448,17 @@ export default function NotesManagement() {
               <div className="col-span-3 text-center text-gray-400 text-lg">No notes found for the selected filter.</div>
             ) : (
               filteredNotes.map(note => (
-                <div key={note.id} className="bg-white/90 backdrop-blur-md rounded-2xl p-6 shadow flex flex-col border border-gray-100">
+                <div key={note.id} className="bg-white/90 backdrop-blur-md rounded-2xl p-6 shadow flex flex-col border border-gray-100 relative">
+                  {/* Date bubble in top right */}
+                  <div className="absolute top-4 right-4 bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold">
+                    {note.createdAt ? (() => {
+                      const date = new Date(note.createdAt.toDate ? note.createdAt.toDate() : note.createdAt);
+                      const day = date.getDate();
+                      const month = date.toLocaleDateString('en-US', { month: 'short' });
+                      const year = date.getFullYear();
+                      return `${day} ${month} ${year}`;
+                    })() : 'No date'}
+                  </div>
                   <div className="font-bold text-lg text-blue-800 mb-1">{note.title}</div>
                   <div className="text-gray-600 mb-2">{note.description}</div>
                   <div className="flex gap-4 mb-4">

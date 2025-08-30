@@ -6,6 +6,7 @@ import { collection, query, where, getDocs, doc, getDoc, onSnapshot } from 'fire
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { db } from '../../lib/firebaseClient';
 import Link from 'next/link';
+import Sidebar from "@/app/assessment-dashboard/components/Sidebar";
 
 import { 
   BarChart, 
@@ -22,7 +23,7 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { Clock, CheckCircle, AlertCircle, Calendar, BookOpen, Target, TrendingUp, Award, List, RefreshCw } from 'lucide-react';
+import { Clock, CheckCircle, AlertCircle, Calendar, BookOpen, Target, TrendingUp, Award, List, RefreshCw, Users, GraduationCap } from 'lucide-react';
 import { retryWithBackoff, handleFirebaseError, isOnline, waitForNetwork } from '../../lib/utils';
 
 // Types for assessment data
@@ -513,16 +514,25 @@ const AssessmentDashboard = () => {
 
   // Admin/Teacher/Principal view: show students in their school
   if (userRole && userRole !== 'student') {
+    // Derived KPIs for admin view
+    const totalStudents = adminStudents.length;
+    const classAssignedCount = adminStudents.filter((s: any) => !!(s.class || s.className || (typeof s.classId === 'string' ? s.classId : s.classId?.id))).length;
+    const uniqueClassCount = Array.from(new Set(adminStudents
+      .map((s: any) => s.class || s.className || (typeof s.classId === 'string' ? s.classId : s.classId?.id))
+      .filter(Boolean)
+    )).length;
     return (
-      <div className="flex-1 bg-gray-50 min-h-screen">
-        <div className="p-6">
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex-1 bg-slate-50">
+          <div className="p-6">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold text-gray-800">Assessment Dashboard</h1>
             <div className="flex gap-3">
               <button
                 onClick={() => fetchData(true)}
                 disabled={refreshing}
-                className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="bg-white border border-slate-200/70 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 hover:shadow-sm transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 title="Refresh data from Firebase"
               >
                 <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
@@ -545,551 +555,128 @@ const AssessmentDashboard = () => {
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
             </div>
           ) : (
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-700">Students in your school</h2>
-                <span className="text-sm text-gray-500">{adminStudents.length} students</span>
-              </div>
-              <div className="text-xs text-gray-500 mb-3">Role: {userRole} • School: {schoolId}</div>
-              {adminStudents.length === 0 && (
-                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded mb-4 text-yellow-800">
-                  No students found for your school. Ensure student records have a valid schoolId and role set.
+            <>
+              {/* Top KPI Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <div className="bg-white p-6 rounded-xl shadow hover:shadow-md transition">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-sm font-medium text-slate-600 mb-1">Total Students</h2>
+                      <div className="text-3xl font-bold text-slate-900">{totalStudents}</div>
+                    </div>
+                    <div className="bg-blue-50 p-3 rounded-lg text-blue-600">
+                      <Users className="w-6 h-6" />
+                    </div>
+                  </div>
                 </div>
-              )}
-              <div className="overflow-x-auto">
-                <table className="min-w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {adminStudents.map((s: any) => {
-                      const uid = s.userId || s.uid || (s.role ? s.id : undefined); // prefer explicit userId; fallback to users doc id
-                      const href = uid
-                        ? `/assessment-dashboard/student/${s.id}?uid=${encodeURIComponent(uid)}`
-                        : `/assessment-dashboard/student/${s.id}`;
-                      return (
-                        <tr key={s.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-700">
-                            <Link href={href} className="hover:underline">{s.displayName || s.name || '-'}</Link>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{s.email || '-'}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{s.class || s.className || (s.classId?.id ?? '-') }</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                <div className="bg-white p-6 rounded-xl shadow hover:shadow-md transition">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-sm font-medium text-slate-600 mb-1">With Class Assigned</h2>
+                      <div className="text-3xl font-bold text-slate-900">{classAssignedCount}</div>
+                    </div>
+                    <div className="bg-emerald-50 p-3 rounded-lg text-emerald-600">
+                      <GraduationCap className="w-6 h-6" />
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow hover:shadow-md transition">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-sm font-medium text-slate-600 mb-1">Unique Classes</h2>
+                      <div className="text-3xl font-bold text-slate-900">{uniqueClassCount}</div>
+                    </div>
+                    <div className="bg-purple-50 p-3 rounded-lg text-purple-600">
+                      <List className="w-6 h-6" />
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
+
+              {/* Students Table */}
+              <div className="bg-white p-6 rounded-xl shadow border border-slate-200/70">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold text-gray-700">Students in your school</h2>
+                  <span className="text-sm text-gray-500">{adminStudents.length} students</span>
+                </div>
+                <div className="text-xs text-gray-500 mb-3">Role: {userRole} • School: {schoolId}</div>
+                {adminStudents.length === 0 && (
+                  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded mb-4 text-yellow-800">
+                    No students found for your school. Ensure student records have a valid schoolId and role set.
+                  </div>
+                )}
+                <div className="overflow-x-auto">
+                  <table className="min-w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {adminStudents.map((s: any) => {
+                        const uid = s.userId || s.uid || (s.role ? s.id : undefined); // prefer explicit userId; fallback to users doc id
+                        const href = uid
+                          ? `/assessment-dashboard/student/${s.id}?uid=${encodeURIComponent(uid)}`
+                          : `/assessment-dashboard/student/${s.id}`;
+                        return (
+                          <tr key={s.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-700">
+                              <Link href={href} className="hover:underline">{s.displayName || s.name || '-'}</Link>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{s.email || '-'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{s.class || s.className || (s.classId?.id ?? '-') }</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
           )}
+          </div>
         </div>
       </div>
     );
   }
 
+  // Student view: redirect to admin dashboard or show appropriate message
+  if (userRole === 'student') {
+    return (
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex-1 bg-slate-50">
+          <div className="p-6">
+            <div className="bg-white p-6 rounded-xl shadow">
+              <h1 className="text-2xl font-bold text-gray-800 mb-4">Access Restricted</h1>
+              <p className="text-gray-600 mb-4">
+                Students should access their assessments through the main testing interface.
+              </p>
+              <Link href="/sample-test">
+                <button className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
+                  Go to Test Interface
+                </button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Default fallback
   return (
-    <div className="flex-1 bg-gray-50 min-h-screen">
-      <div className="p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-800">Assessment Dashboard</h1>
-          <div className="flex gap-3">
-            {/* Refresh Button */}
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              title="Refresh data from Firebase"
-            >
-              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
-            <Link href="/sample-test">
-              <button className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1">
-                Take Sample Test
-              </button>
-            </Link>
+    <div className="flex min-h-screen">
+      <Sidebar />
+      <div className="flex-1 bg-slate-50">
+        <div className="p-6">
+          <div className="bg-white p-6 rounded-xl shadow">
+            <h1 className="text-2xl font-bold text-gray-800 mb-4">Dashboard</h1>
+            <p className="text-gray-600">Please contact your administrator for access.</p>
           </div>
         </div>
-
-        {/* Error Message */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-              <p className="text-red-700">{error}</p>
-            </div>
-            <button
-              onClick={handleRefresh}
-              className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
-            >
-              Try again
-            </button>
-          </div>
-        )}
-
-        {/* Tab Navigation */}
-        <div className="mb-6">
-          <div className="flex space-x-1 bg-white p-1 rounded-lg shadow-md">
-            {[
-              { id: 'overview', label: 'Overview', icon: TrendingUp },
-              { id: 'available', label: 'Available Tests', icon: BookOpen },
-              { id: 'allTests', label: 'All Tests', icon: List },
-              { id: 'results', label: 'Test Results', icon: Award }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-md font-medium transition-all ${
-                  activeTab === tab.id
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                <tab.icon className="w-4 h-4" />
-                <span>{tab.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      
-      {loading ? (
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        </div>
-      ) : (
-        <>
-          {/* Overview Tab */}
-          {activeTab === 'overview' && (
-            <>
-              {/* Performance Overview - Stats Boxes */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-                <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-xl shadow-lg text-white">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-sm font-medium opacity-90 mb-1">Overall Average</h2>
-                      <div className="flex items-end">
-                        <span className="text-3xl font-bold">
-                          {overallAverage.toFixed(1)}%
-                        </span>
-                        <span className="ml-2 text-sm opacity-75">
-                          ({calculateGrade(overallAverage)})
-                        </span>
-                      </div>
-                    </div>
-                    <div className="bg-white bg-opacity-20 p-3 rounded-lg">
-                      <TrendingUp className="w-6 h-6" />
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="bg-gradient-to-br from-green-500 to-green-600 p-6 rounded-xl shadow-lg text-white">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-sm font-medium opacity-90 mb-1">Tests Completed</h2>
-                      <div className="text-3xl font-bold">
-                        {filteredResults.length}
-                      </div>
-                    </div>
-                    <div className="bg-white bg-opacity-20 p-3 rounded-lg">
-                      <CheckCircle className="w-6 h-6" />
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-6 rounded-xl shadow-lg text-white">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-sm font-medium opacity-90 mb-1">Available Tests</h2>
-                      <div className="text-3xl font-bold">
-                        {availableTests.filter(t => t.canTake).length}
-                      </div>
-                    </div>
-                    <div className="bg-white bg-opacity-20 p-3 rounded-lg">
-                      <BookOpen className="w-6 h-6" />
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-6 rounded-xl shadow-lg text-white">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-sm font-medium opacity-90 mb-1">Best Percentage</h2>
-                      <div className="text-3xl font-bold">
-                        {testResults.length > 0 ? 
-                          `${Math.max(...testResults.map(t => t.percentageScore)).toFixed(1)}%`
-                          : 'N/A'
-                        }
-                      </div>
-                    </div>
-                    <div className="bg-white bg-opacity-20 p-3 rounded-lg">
-                      <Award className="w-6 h-6" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-
-              {/* Progress Over Time */}
-              {progressData.length > 0 && (
-                <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-                  <h2 className="text-xl font-semibold text-gray-700 mb-4">Progress Over Time</h2>
-                  <div className="h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart
-                        data={progressData}
-                        margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="date" />
-                        <YAxis domain={[0, 100]} />
-                        <Tooltip />
-                        <Legend />
-                        {Object.keys(progressData[0] || {}).filter(key => key !== 'date').map((subject, index) => (
-                          <Line
-                            key={subject}
-                            type="monotone"
-                            dataKey={subject}
-                            stroke={COLORS[index % COLORS.length]}
-                            activeDot={{ r: 8 }}
-                          />
-                        ))}
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              )}
-
-              {/* Grade Distribution */}
-              {filteredResults.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                  <div className="bg-white p-6 rounded-lg shadow-md">
-                    <h2 className="text-xl font-semibold text-gray-700 mb-4">Grade Distribution</h2>
-                    <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={
-                              ['A+', 'A', 'B+', 'B', 'C', 'D', 'F'].map(grade => ({
-                                name: grade,
-                                value: filteredResults.filter(r => r.grade === grade).length
-                              })).filter(item => item.value > 0)
-                            }
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            outerRadius={80}
-                            fill="#8884d8"
-                            dataKey="value"
-                            label={({ name, percent = 0 }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                          >
-                            {
-                              ['A+', 'A', 'B+', 'B', 'C', 'D', 'F'].map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                              ))
-                            }
-                          </Pie>
-                          <Tooltip />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-
-                  <div className="bg-white p-6 rounded-lg shadow-md">
-                    <h2 className="text-xl font-semibold text-gray-700 mb-4">Recent Tests</h2>
-                    <div className="overflow-y-auto max-h-64">
-                      <table className="min-w-full">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Test</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {recentTests.map((test) => (
-                            <tr key={test.id}>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{test.testName}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{test.subjectName}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {test.percentageScore.toFixed(1)}%
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {test.date.toLocaleDateString()}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {test.testResultId && (
-                                  <Link href={`/test-result/${test.testResultId}`}>
-                                    <button className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors">
-                                      View Details
-                                    </button>
-                                  </Link>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Available Tests Tab - Only Active Tests */}
-          {activeTab === 'available' && (
-            <div className="space-y-6">
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <h2 className="text-xl font-semibold text-gray-700 mb-4">Available Tests</h2>
-                
-                {availableTests.filter(test => test.status !== 'finished').length === 0 ? (
-                  <div className="text-center py-12">
-                    <BookOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500 text-lg">No active tests available at the moment.</p>
-                    <p className="text-gray-400 text-sm mt-2">Check back later for new assessments.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {availableTests.filter(test => test.status !== 'finished').map((test) => (
-                      <div key={test.id} className="bg-white border border-gray-200 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
-                        <div className="flex justify-between items-start mb-4">
-                          <h3 className="text-lg font-semibold text-gray-900">
-                            {test.name}
-                          </h3>
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                              test.status
-                            )}`}
-                          >
-                            {test.status}
-                          </span>
-                        </div>
-
-                        <div className="space-y-3 text-sm text-gray-600 mb-4">
-                          <div className="flex items-center space-x-2">
-                            <Calendar className="w-4 h-4" />
-                            <span>Start: {test.start?.toDate().toLocaleString()}</span>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Clock className="w-4 h-4" />
-                            <span>End: {test.end?.toDate().toLocaleString()}</span>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Target className="w-4 h-4" />
-                            <span>Questions: {test.questions?.length || 0}</span>
-                          </div>
-                          {test.status === "ongoing" && (
-                            <div className="flex items-center space-x-2 text-red-600 font-medium">
-                              <AlertCircle className="w-4 h-4" />
-                              <span>Time remaining: {formatTimeRemaining(test.timeRemaining)}</span>
-                            </div>
-                          )}
-                          {test.hasCompleted && (
-                            <div className="flex items-center space-x-2 text-green-600 font-medium">
-                              <CheckCircle className="w-4 h-4" />
-                              <span>Test Completed</span>
-                            </div>
-                          )}
-                          <div className="text-blue-600 font-medium">
-                            {test.wholeClass ? "Whole Class Test" : "Selective Test"}
-                          </div>
-                          {test.subjectName && (
-                            <div className="text-gray-500">
-                              Subject: {test.subjectName}
-                            </div>
-                          )}
-                        </div>
-
-                        <button
-                          onClick={() => startTest(test.id)}
-                          disabled={!test.canTake}
-                          className={`w-full py-2 px-4 rounded-lg font-medium transition-all ${
-                            test.canTake
-                              ? "bg-blue-600 text-white hover:bg-blue-700 transform hover:-translate-y-1"
-                              : test.hasCompleted
-                              ? "bg-green-100 text-green-700 cursor-not-allowed"
-                              : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                          }`}
-                        >
-                          {test.canTake ? "Start Test" : test.hasCompleted ? "Completed" : "Test Unavailable"}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* All Tests Tab - Including Expired Tests */}
-          {activeTab === 'allTests' && (
-            <div className="space-y-6">
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <h2 className="text-xl font-semibold text-gray-700 mb-4">All Tests</h2>
-                
-                {availableTests.length === 0 ? (
-                  <div className="text-center py-12">
-                    <List className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500 text-lg">No tests found.</p>
-                    <p className="text-gray-400 text-sm mt-2">No tests have been created for your class yet.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {availableTests.map((test) => (
-                      <div key={test.id} className="bg-white border border-gray-200 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
-                        <div className="flex justify-between items-start mb-4">
-                          <h3 className="text-lg font-semibold text-gray-900">
-                            {test.name}
-                          </h3>
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                              test.status
-                            )}`}
-                          >
-                            {test.status}
-                          </span>
-                        </div>
-
-                        <div className="space-y-3 text-sm text-gray-600 mb-4">
-                          <div className="flex items-center space-x-2">
-                            <Calendar className="w-4 h-4" />
-                            <span>Start: {test.start?.toDate().toLocaleString()}</span>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Clock className="w-4 h-4" />
-                            <span>End: {test.end?.toDate().toLocaleString()}</span>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Target className="w-4 h-4" />
-                            <span>Questions: {test.questions?.length || 0}</span>
-                          </div>
-                          {test.status === "ongoing" && (
-                            <div className="flex items-center space-x-2 text-red-600 font-medium">
-                              <AlertCircle className="w-4 h-4" />
-                              <span>Time remaining: {formatTimeRemaining(test.timeRemaining)}</span>
-                            </div>
-                          )}
-                          {test.hasCompleted && (
-                            <div className="flex items-center space-x-2 text-green-600 font-medium">
-                              <CheckCircle className="w-4 h-4" />
-                              <span>Test Completed</span>
-                            </div>
-                          )}
-                          <div className="text-blue-600 font-medium">
-                            {test.wholeClass ? "Whole Class Test" : "Selective Test"}
-                          </div>
-                          {test.subjectName && (
-                            <div className="text-gray-500">
-                              Subject: {test.subjectName}
-                            </div>
-                          )}
-                        </div>
-
-                        <button
-                          onClick={() => startTest(test.id)}
-                          disabled={!test.canTake}
-                          className={`w-full py-2 px-4 rounded-lg font-medium transition-all ${
-                            test.canTake
-                              ? "bg-blue-600 text-white hover:bg-blue-700 transform hover:-translate-y-1"
-                              : test.hasCompleted
-                              ? "bg-green-100 text-green-700 cursor-not-allowed"
-                              : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                          }`}
-                        >
-                          {test.canTake ? "Start Test" : test.hasCompleted ? "Completed" : "Test Unavailable"}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Test Results Tab */}
-          {activeTab === 'results' && (
-            <div className="space-y-6">
-              {/* Time Range Filter */}
-              <div className="bg-white p-4 rounded-lg shadow-md">
-                <h2 className="text-lg font-semibold text-gray-700 mb-3">Filter by Time Range</h2>
-                <div className="flex space-x-4">
-                  {['all', 'month', 'quarter', 'year'].map((range) => (
-                    <button
-                      key={range}
-                      onClick={() => setSelectedTimeRange(range)}
-                      className={`px-4 py-2 rounded-md ${
-                        selectedTimeRange === range
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      }`}
-                    >
-                      {range === 'all' ? 'All Time' : 
-                       range === 'month' ? 'Last Month' : 
-                       range === 'quarter' ? 'Last 3 Months' : 'Last Year'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {filteredResults.length === 0 ? (
-                <div className="bg-white rounded-lg shadow-md p-6 text-center">
-                  <Award className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <h2 className="text-xl font-semibold text-gray-700">No Test Results Available</h2>
-                  <p className="text-gray-500 mt-2">
-                    You haven't completed any tests yet. Your results will appear here once you take assessments.
-                  </p>
-                </div>
-              ) : (
-                <div className="bg-white p-6 rounded-lg shadow-md">
-                  <h2 className="text-xl font-semibold text-gray-700 mb-4">Test Results</h2>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Test Name</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {filteredResults.map((test) => (
-                          <tr key={test.id} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{test.testName}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{test.subjectName}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {test.percentageScore.toFixed(1)}%
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {test.date.toLocaleDateString()}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {test.testResultId && (
-                                <Link href={`/test-result/${test.testResultId}`}>
-                                  <button className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors">
-                                    View Details
-                                  </button>
-                                </Link>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </>
-      )}
       </div>
     </div>
   );

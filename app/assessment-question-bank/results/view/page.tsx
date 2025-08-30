@@ -35,19 +35,19 @@ export default function ResultsViewPage() {
   }, []);
 
   const reportCards = [
-    // {
-    //   title: "Overall School Performance",
-    //   description: "Comprehensive overview of school-wide assessment results",
-    //   icon: "🏫",
-    //   color: "blue",
-    //   href: "/assessment-question-bank/results/view/overall-school"
-    // },
+    {
+      title: "Overall School Performance",
+      description: "Comprehensive overview of school-wide assessment results",
+      icon: "🏫",
+      color: "blue",
+      href: "/assessment-question-bank/results/view/overall-school"
+    },
     {
       title: "Studentwise Report",
       description: "Individual student performance across all assessments",
       icon: "👨‍🎓",
       color: "emerald",
-      href: "/assessment-dashboard"
+      href: "/assessment-dashboard/dash"
     },
     {
       title: "Classwise Report",
@@ -55,28 +55,28 @@ export default function ResultsViewPage() {
       icon: "📚",
       color: "purple",
       href: "/assessment-question-bank/results/view/classwisekiro"
-    }
-    // {
-    //   title: "Subjectwise Report",
-    //   description: "Subject-specific performance and trends",
-    //   icon: "📊",
-    //   color: "orange",
-    //   href: "/assessment-question-bank/results/view/subjectwise"
-    // },
-    // {
-    //   title: "Difficulty Report",
-    //   description: "Question difficulty analysis and student performance",
-    //   icon: "⚡",
-    //   color: "red",
-    //   href: "/assessment-question-bank/results/view/difficulty"
-    // },
-    // {
-    //   title: "Bloom's Taxonomy Performance",
-    //   description: "Cognitive skill level assessment and analysis",
-    //   icon: "🌸",
-    //   color: "pink",
-    //   href: "/assessment-question-bank/results/view/blooms-taxonomy"
-    // },
+    },
+    {
+      title: "Subjectwise Report",
+      description: "Subject-specific performance and trends",
+      icon: "📊",
+      color: "orange",
+      href: "/assessment-question-bank/results/view/subjectwise"
+    },
+    {
+      title: "Difficulty Report",
+      description: "Question difficulty analysis and student performance",
+      icon: "⚡",
+      color: "red",
+      href: "/assessment-question-bank/results/view/difficulty"
+    },
+    {
+      title: "Bloom's Taxonomy Performance",
+      description: "Cognitive skill level assessment and analysis",
+      icon: "🌸",
+      color: "pink",
+      href: "/assessment-question-bank/results/view/blooms-taxonomy"
+    },
     // {
     //   title: "Question Effectiveness Report",
     //   description: "Analysis of question quality and discrimination",
@@ -84,13 +84,13 @@ export default function ResultsViewPage() {
     //   color: "teal",
     //   href: "/assessment-question-bank/results/view/question-effectiveness"
     // },
-    // {
-    //   title: "Top Performers & At-Risk Students",
-    //   description: "Identification of high achievers and students needing support",
-    //   icon: "🎯",
-    //   color: "yellow",
-    //   href: "/assessment-question-bank/results/view/top-performers"
-    // },
+    {
+      title: "Top Performers & At-Risk Students",
+      description: "Identification of high achievers and students needing support",
+      icon: "🎯",
+      color: "yellow",
+      href: "/assessment-question-bank/results/view/top-performers"
+    },
     // {
     //   title: "Time Efficiency Reports",
     //   description: "Analysis of time management and completion patterns",
@@ -105,20 +105,20 @@ export default function ResultsViewPage() {
     //   color: "green",
     //   href: "/assessment-question-bank/results/view/participation"
     // },
-    // {
-    //   title: "Chapterwise Report",
-    //   description: "Performance analysis by textbook chapters and units",
-    //   icon: "📖",
-    //   color: "violet",
-    //   href: "/assessment-question-bank/results/view/chapterwise"
-    // },
-    // {
-    //   title: "Lessonwise Report",
-    //   description: "Detailed analysis of individual lesson performance",
-    //   icon: "📝",
-    //   color: "slate",
-    //   href: "/assessment-question-bank/results/view/lessonwise"
-    // }
+    {
+      title: "Chapterwise Report",
+      description: "Performance analysis by textbook chapters and units",
+      icon: "📖",
+      color: "violet",
+      href: "/assessment-question-bank/results/view/chapterwise"
+    },
+    {
+      title: "Lessonwise Report",
+      description: "Detailed analysis of individual lesson performance",
+      icon: "📝",
+      color: "slate",
+      href: "/assessment-question-bank/results/view/lessonwise"
+    }
   ];
 
   const getColorClasses = (color: string, isHovered: boolean) => {

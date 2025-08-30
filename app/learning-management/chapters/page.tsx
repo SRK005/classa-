@@ -22,12 +22,14 @@ interface Chapter {
   description: string;
   subjectId: string;
   orderIndex: number;
+  classId?: string;
   createdAt: any;
   updatedAt?: any;
 }
 
 interface ChapterWithDetails extends Chapter {
   subjectName: string;
+  className?: string;
 }
 
 export default function ChapterManagementPage() {
@@ -74,6 +76,7 @@ export default function ChapterManagementPage() {
           description: chapterData.description || "",
           subjectId: chapterData.subjectId?.id || chapterData.subjectId,
           orderIndex: chapterData.orderIndex || 0,
+          classId: chapterData.classId?.id || chapterData.classId,
           createdAt: chapterData.createdAt,
           updatedAt: chapterData.updatedAt,
         };
@@ -91,9 +94,23 @@ export default function ChapterManagementPage() {
           console.error("Error fetching subject name:", error);
         }
 
+        // Fetch class name
+        let className = "";
+        try {
+          if (chapter.classId) {
+            const classDoc = await getDoc(doc(db, "classes", chapter.classId));
+            if (classDoc.exists()) {
+              className = classDoc.data().name;
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching class name:", error);
+        }
+
         return {
           ...chapter,
           subjectName: subjectName || "Unknown Subject",
+          className: className || "No Class Assigned",
         };
       });
 
@@ -131,8 +148,17 @@ export default function ChapterManagementPage() {
     }
   };
 
-  const handleEditChapter = (chapter: Chapter) => {
-    setEditingChapter(chapter);
+  const handleEditChapter = (chapter: ChapterWithDetails) => {
+    setEditingChapter({
+      id: chapter.id,
+      name: chapter.name,
+      description: chapter.description,
+      subjectId: chapter.subjectId,
+      orderIndex: chapter.orderIndex,
+      classId: chapter.classId,
+      createdAt: chapter.createdAt,
+      updatedAt: chapter.updatedAt,
+    });
     setShowForm(true);
   };
 
@@ -233,22 +259,25 @@ export default function ChapterManagementPage() {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-l font-medium text-gray-600 ">
                         Chapter Name
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-l font-medium text-gray-600 ">
                         Subject
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-l font-medium text-gray-600 ">
+                        Class
+                      </th>
+                      <th className="px-6 py-3 text-left text-l font-medium text-gray-600 ">
                         Description
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-l font-medium text-gray-600 ">
                         Order
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-l font-medium text-gray-600 ">
                         Created At
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-l font-medium text-gray-600 ">
                         Actions
                       </th>
                     </tr>
@@ -256,7 +285,7 @@ export default function ChapterManagementPage() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {chapters.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                        <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                           <div className="flex flex-col items-center">
                             <FontAwesomeIcon icon={faBookmark} className="text-4xl text-gray-300 mb-4" />
                             <p className="text-lg font-medium mb-2">No chapters found</p>
@@ -275,6 +304,11 @@ export default function ChapterManagementPage() {
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">
                               {chapter.subjectName}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">
+                              {chapter.className}
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -342,4 +376,4 @@ export default function ChapterManagementPage() {
       )}
     </div>
   );
-} 
+}

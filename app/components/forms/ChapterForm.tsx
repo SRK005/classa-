@@ -16,9 +16,15 @@ interface ChapterFormProps {
     description: string;
     subjectId: string;
     orderIndex: number;
+    classId?: string;
   };
   onSuccess?: () => void;
   onCancel?: () => void;
+}
+
+interface ClassOption {
+  value: string;
+  label: string;
 }
 
 interface SubjectOption {
@@ -33,15 +39,44 @@ export default function ChapterForm({ chapterId, initialData, onSuccess, onCance
     description: initialData?.description || "",
     subjectId: initialData?.subjectId || "",
     orderIndex: initialData?.orderIndex || 1,
+    classId: initialData?.classId || "",
   });
   const [subjects, setSubjects] = useState<SubjectOption[]>([]);
+  const [classes, setClasses] = useState<ClassOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingSubjects, setLoadingSubjects] = useState(true);
+  const [loadingClasses, setLoadingClasses] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetchSubjects();
+    fetchClasses();
   }, [schoolId]);
+
+  const fetchClasses = async () => {
+    if (!schoolId) return;
+    
+    setLoadingClasses(true);
+    try {
+      const classesQuery = query(
+        collection(db, "classes"),
+        where("schoolId", "==", doc(db, "school", schoolId))
+      );
+      const classesSnapshot = await getDocs(classesQuery);
+      
+      const classOptions: ClassOption[] = classesSnapshot.docs.map(doc => ({
+        value: doc.id,
+        label: doc.data().name
+      }));
+      
+      setClasses(classOptions);
+    } catch (error) {
+      console.error("Error fetching classes:", error);
+      setErrors({ classes: "Failed to load classes" });
+    } finally {
+      setLoadingClasses(false);
+    }
+  };
 
   const fetchSubjects = async () => {
     if (!schoolId) return;
@@ -83,6 +118,10 @@ export default function ChapterForm({ chapterId, initialData, onSuccess, onCance
       newErrors.school = "School ID is required";
     }
 
+    if (formData.classId && !classes.some(c => c.value === formData.classId)) {
+      newErrors.classId = "Invalid class selected";
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -99,6 +138,7 @@ export default function ChapterForm({ chapterId, initialData, onSuccess, onCance
         subjectId: doc(db, "subjects", formData.subjectId),
         schoolId: doc(db, "school", schoolId!),
         orderIndex: formData.orderIndex,
+        classId: formData.classId ? doc(db, "classes", formData.classId) : null,
         createdBy: doc(db, "users", user!.uid),
         ...(chapterId 
           ? { updatedAt: serverTimestamp() }
@@ -162,6 +202,16 @@ export default function ChapterForm({ chapterId, initialData, onSuccess, onCance
           required
         />
 
+        <Select
+          label="Class"
+          options={classes}
+          value={formData.classId}
+          onChange={(value) => setFormData(prev => ({ ...prev, classId: value }))}
+          placeholder="Select a class"
+          disabled={loadingClasses}
+          error={errors.classId}
+        />
+
         {errors.submit && (
           <div className="text-red-600 text-sm">{errors.submit}</div>
         )}
@@ -192,4 +242,4 @@ export default function ChapterForm({ chapterId, initialData, onSuccess, onCance
       </form>
     </FormCard>
   );
-} 
+}
