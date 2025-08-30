@@ -178,8 +178,8 @@ export default function QuestionBankDashboard() {
             <div className="bg-[#FBCFE8] p-3 rounded-full mb-4">
               <FontAwesomeIcon icon={faList} className="text-xl text-white" />
             </div>
-            <h2 className="font-bold text-lg text-gray-800 mb-2 text-center">View PYQ</h2>
-            <p className="text-gray-500 text-center mb-6">Access previous year questions for NEET and JEE exams.</p>
+            <h2 className="font-bold text-lg text-gray-800 mb-2 text-center">View NEET PYQ</h2>
+            <p className="text-gray-500 text-center mb-6">Access previous year questions for NEET exams.</p>
             <button className="bg-[#FBCFE8] text-gray-800 px-6 py-2 rounded-lg font-semibold hover:bg-[#F472B6] transition text-base" onClick={() => router.push('/assessment-question-bank/pyq')}>View</button>
           </div>
           {/* Bulk Upload */}
