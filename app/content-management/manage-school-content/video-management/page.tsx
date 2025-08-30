@@ -411,7 +411,6 @@ export default function VideoManagement() {
                       <div className="relative">
                         <select
                           className="w-full bg-blue-100/80 backdrop-blur border border-blue-100 rounded-xl px-5 py-3 text-base font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 shadow"
-                           className="w-full bg-blue-100/80 backdrop-blur border border-blue-100 rounded-xl px-5 py-3 text-base font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 shadow"
                           value={selectedClass}
                           onChange={e => {
                             setSelectedClass(e.target.value);
